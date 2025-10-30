@@ -1,6 +1,8 @@
 defmodule LicoriceLaneWeb.InventoryLive do
   use LicoriceLaneWeb, :live_view
 
+  # perhaps the buttons should toggle items on and off?
+
   def mount(_params, _session, socket) do
     # Mock inventory data - replace with real data later
     inventory = [
@@ -83,6 +85,8 @@ defmodule LicoriceLaneWeb.InventoryLive do
       socket
       |> assign(:inventory, inventory)
       |> assign(:full_inventory, inventory)
+      |> assign(:search_term, "")
+      |> assign(:selected_category, "all")
 
     {:ok, socket}
   end
@@ -129,10 +133,12 @@ defmodule LicoriceLaneWeb.InventoryLive do
               Linens
             </button>
           </div>
-          <div class="relative">
+          <form phx-change="search" class="relative">
             <input
               type="text"
               placeholder="Search decor items..."
+              value={@search_term}
+              name="search_term"
               class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
             />
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -146,7 +152,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
                 </path>
               </svg>
             </div>
-          </div>
+          </form>
         </div>
         
     <!-- Inventory Grid -->
@@ -230,35 +236,69 @@ defmodule LicoriceLaneWeb.InventoryLive do
     """
   end
 
-  def handle_event("show_all", _payload, socket) do
-    {:noreply, assign(socket, :inventory, socket.assigns.full_inventory)}
-  end
-
-  def handle_event("show_candles_and_lighting", _payload, socket) do
-    candles = filter_inventory(socket.assigns.inventory, "candles")
-
+  def handle_event("search", %{"search_term" => search_term}, socket) do
     socket =
-      assigns(socket, :inventory, candles)
-      |> update(:inventory, "fn that adds lights")
+      socket
+      |> assign(:search_term, search_term)
+      |> apply_filters()
 
     {:noreply, socket}
   end
 
-  def handle_event("show_tableware", _payload, socket) do
-    inventory = filter_inventory(socket.assigns.inventory, "tableware")
-    socket = update(socket, :inventory, inventory)
+  def handle_event("show_all", _payload, socket) do
+    socket =
+      socket
+      |> assign(:selected_category, "all")
+      |> apply_filters()
 
     {:noreply, socket}
   end
 
-  def handle_event("show_", _payload, socket) do
-    inventory = filter_inventory(socket.assigns.inventory, "asdf")
-    socket = update(socket, :inventory, inventory)
+  def handle_event("show_" <> category, _payload, socket) do
+    socket =
+      socket
+      |> assign(:selected_category, category)
+      |> apply_filters()
 
     {:noreply, socket}
   end
 
-  def filter_inventory(inventory, inv_type) do
+  # New helper function that applies both category and search filters
+  defp apply_filters(socket) do
+    inventory = socket.assigns.full_inventory
+    category = socket.assigns.selected_category
+    search_term = socket.assigns.search_term
+
+    filtered_inventory =
+      inventory
+      |> filter_by_category(category)
+      |> filter_by_search(search_term)
+
+    assign(socket, :inventory, filtered_inventory)
+  end
+
+  defp filter_by_category(inventory, "all"), do: inventory
+
+  defp filter_by_category(inventory, "candles_and_lighting") do
+    filter_inventory(inventory, "candles") ++ filter_inventory(inventory, "lighting")
+  end
+
+  defp filter_by_category(inventory, category) do
+    filter_inventory(inventory, category)
+  end
+
+  defp filter_by_search(inventory, ""), do: inventory
+
+  defp filter_by_search(inventory, search_term) do
+    search_term = String.downcase(search_term)
+
+    Enum.filter(inventory, fn item ->
+      String.contains?(String.downcase(item.name), search_term) ||
+        String.contains?(String.downcase(item.description), search_term)
+    end)
+  end
+
+  defp filter_inventory(inventory, inv_type) do
     Enum.filter(inventory, fn item -> item.category == inv_type end)
   end
 end
