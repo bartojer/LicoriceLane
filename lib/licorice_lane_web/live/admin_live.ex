@@ -4,65 +4,75 @@ defmodule LicoriceLaneWeb.AdminLive do
   def mount(_params, _session, socket) do
     # Mock admin data - replace with real data later
     stats = %{
-      total_products: 127,
-      total_orders: 89,
-      revenue_today: "$1,247.50",
-      low_stock_items: 8
+      total_inventory: 342,
+      total_bookings: 23,
+      revenue_today: "$3,850.00",
+      low_stock_items: 12
     }
 
-    recent_orders = [
+    recent_bookings = [
       %{
-        id: "ORD-001",
+        id: "EVT-001",
         customer: "Sarah Johnson",
-        total: "$23.97",
-        status: "shipped",
-        date: "2025-10-29"
+        total: "$2,450.00",
+        status: "confirmed",
+        date: "2025-11-15",
+        event_type: "Wedding"
       },
       %{
-        id: "ORD-002",
-        customer: "Mike Chen",
-        total: "$15.49",
-        status: "processing",
-        date: "2025-10-29"
+        id: "EVT-002",
+        customer: "Corporate Solutions Inc",
+        total: "$1,875.00",
+        status: "setup",
+        date: "2025-11-02",
+        event_type: "Corporate Gala"
       },
       %{
-        id: "ORD-003",
-        customer: "Emily Davis",
-        total: "$41.25",
+        id: "EVT-003",
+        customer: "Jennifer Martinez",
+        total: "$890.00",
         status: "pending",
-        date: "2025-10-28"
+        date: "2025-11-08",
+        event_type: "Birthday Party"
       }
     ]
 
-    low_stock_products = [
+    low_stock_items = [
       %{
         id: 1,
-        name: "Swedish Fish Assortment",
-        current_stock: 3,
-        min_stock: 10,
-        category: "red"
+        name: "Gold Chiavari Chairs",
+        current_stock: 8,
+        min_stock: 25,
+        category: "seating"
       },
       %{
         id: 2,
-        name: "Classic Dutch Black Licorice",
-        current_stock: 7,
-        min_stock: 15,
-        category: "black"
+        name: "Round White Tablecloths (120\")",
+        current_stock: 12,
+        min_stock: 30,
+        category: "linens"
       },
       %{
         id: 3,
-        name: "Artisan Anise Drops",
-        current_stock: 2,
-        min_stock: 8,
-        category: "black"
+        name: "Crystal Centerpiece Vases",
+        current_stock: 5,
+        min_stock: 15,
+        category: "centerpieces"
+      },
+      %{
+        id: 4,
+        name: "String Light Sets (100ft)",
+        current_stock: 3,
+        min_stock: 12,
+        category: "lighting"
       }
     ]
 
     socket =
       socket
       |> assign(:stats, stats)
-      |> assign(:recent_orders, recent_orders)
-      |> assign(:low_stock_products, low_stock_products)
+      |> assign(:recent_bookings, recent_bookings)
+      |> assign(:low_stock_items, low_stock_items)
       |> assign(:active_tab, "dashboard")
 
     {:ok, socket}
@@ -81,11 +91,11 @@ defmodule LicoriceLaneWeb.AdminLive do
           <div class="flex justify-between items-center py-6">
             <div>
               <h1 class="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p class="mt-1 text-sm text-gray-500">Manage your Licorice Lane store</p>
+              <p class="mt-1 text-sm text-gray-500">Manage your event decor business</p>
             </div>
             <div class="flex items-center space-x-4">
               <button class="bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand/90 transition-colors">
-                Add Product
+                Add Inventory Item
               </button>
               <div class="flex items-center space-x-2">
                 <div class="w-8 h-8 bg-brand rounded-full flex items-center justify-center">
@@ -111,24 +121,24 @@ defmodule LicoriceLaneWeb.AdminLive do
             </button>
             <button
               phx-click="switch_tab"
-              phx-value-tab="products"
-              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "products", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
+              phx-value-tab="inventory"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "inventory", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
             >
-              Products
+              Inventory
             </button>
             <button
               phx-click="switch_tab"
-              phx-value-tab="orders"
-              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "orders", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
+              phx-value-tab="bookings"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "bookings", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
             >
-              Orders
+              Bookings
             </button>
             <button
               phx-click="switch_tab"
-              phx-value-tab="customers"
-              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "customers", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
+              phx-value-tab="clients"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "clients", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
             >
-              Customers
+              Clients
             </button>
           </nav>
         </div>
@@ -140,16 +150,16 @@ defmodule LicoriceLaneWeb.AdminLive do
           {render_dashboard(assigns)}
         <% end %>
 
-        <%= if @active_tab == "products" do %>
-          {render_products(assigns)}
+        <%= if @active_tab == "inventory" do %>
+          {render_inventory(assigns)}
         <% end %>
 
-        <%= if @active_tab == "orders" do %>
-          {render_orders(assigns)}
+        <%= if @active_tab == "bookings" do %>
+          {render_bookings(assigns)}
         <% end %>
 
-        <%= if @active_tab == "customers" do %>
-          {render_customers(assigns)}
+        <%= if @active_tab == "clients" do %>
+          {render_clients(assigns)}
         <% end %>
       </div>
     </div>
@@ -183,8 +193,8 @@ defmodule LicoriceLaneWeb.AdminLive do
               </div>
               <div class="ml-5 w-0 flex-1">
                 <dl>
-                  <dt class="text-sm font-medium text-gray-500 truncate">Total Products</dt>
-                  <dd class="text-lg font-medium text-gray-900">{@stats.total_products}</dd>
+                  <dt class="text-sm font-medium text-gray-500 truncate">Total Inventory Items</dt>
+                  <dd class="text-lg font-medium text-gray-900">{@stats.total_inventory}</dd>
                 </dl>
               </div>
             </div>
@@ -213,8 +223,8 @@ defmodule LicoriceLaneWeb.AdminLive do
               </div>
               <div class="ml-5 w-0 flex-1">
                 <dl>
-                  <dt class="text-sm font-medium text-gray-500 truncate">Total Orders</dt>
-                  <dd class="text-lg font-medium text-gray-900">{@stats.total_orders}</dd>
+                  <dt class="text-sm font-medium text-gray-500 truncate">Total Bookings</dt>
+                  <dd class="text-lg font-medium text-gray-900">{@stats.total_bookings}</dd>
                 </dl>
               </div>
             </div>
@@ -284,30 +294,31 @@ defmodule LicoriceLaneWeb.AdminLive do
       
     <!-- Recent Activity Section -->
       <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <!-- Recent Orders -->
+        <!-- Recent Bookings -->
         <div class="bg-white shadow rounded-lg">
           <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Orders</h3>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Bookings</h3>
             <div class="space-y-3">
-              <%= for order <- @recent_orders do %>
+              <%= for booking <- @recent_bookings do %>
                 <div class="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
                   <div class="flex items-center space-x-3">
                     <div>
-                      <p class="text-sm font-medium text-gray-900">{order.id}</p>
-                      <p class="text-sm text-gray-500">{order.customer}</p>
+                      <p class="text-sm font-medium text-gray-900">{booking.id}</p>
+                      <p class="text-sm text-gray-500">{booking.customer}</p>
+                      <p class="text-xs text-gray-400">{booking.event_type}</p>
                     </div>
                   </div>
                   <div class="flex items-center space-x-3">
-                    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{order_status_class(order.status)}"}>
-                      {String.capitalize(order.status)}
+                    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{booking_status_class(booking.status)}"}>
+                      {String.capitalize(booking.status)}
                     </span>
-                    <span class="text-sm font-medium text-gray-900">{order.total}</span>
+                    <span class="text-sm font-medium text-gray-900">{booking.total}</span>
                   </div>
                 </div>
               <% end %>
             </div>
             <div class="mt-4">
-              <button class="text-sm text-brand hover:text-brand/80">View all orders →</button>
+              <button class="text-sm text-brand hover:text-brand/80">View all bookings →</button>
             </div>
           </div>
         </div>
@@ -315,25 +326,25 @@ defmodule LicoriceLaneWeb.AdminLive do
     <!-- Low Stock Items -->
         <div class="bg-white shadow rounded-lg">
           <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Low Stock Alert</h3>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Inventory Alert</h3>
             <div class="space-y-3">
-              <%= for product <- @low_stock_products do %>
+              <%= for item <- @low_stock_items do %>
                 <div class="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
                   <div>
-                    <p class="text-sm font-medium text-gray-900">{product.name}</p>
+                    <p class="text-sm font-medium text-gray-900">{item.name}</p>
                     <p class="text-sm text-gray-500">
-                      Category: {String.capitalize(product.category)}
+                      Category: {String.capitalize(item.category)}
                     </p>
                   </div>
                   <div class="text-right">
-                    <p class="text-sm font-medium text-red-600">{product.current_stock} left</p>
-                    <p class="text-xs text-gray-500">Min: {product.min_stock}</p>
+                    <p class="text-sm font-medium text-red-600">{item.current_stock} left</p>
+                    <p class="text-xs text-gray-500">Min: {item.min_stock}</p>
                   </div>
                 </div>
               <% end %>
             </div>
             <div class="mt-4">
-              <button class="text-sm text-brand hover:text-brand/80">Reorder products →</button>
+              <button class="text-sm text-brand hover:text-brand/80">Restock items →</button>
             </div>
           </div>
         </div>
@@ -342,14 +353,14 @@ defmodule LicoriceLaneWeb.AdminLive do
     """
   end
 
-  defp render_products(assigns) do
+  defp render_inventory(assigns) do
     ~H"""
     <div class="bg-white shadow rounded-lg">
       <div class="px-4 py-5 sm:p-6">
         <div class="flex justify-between items-center mb-6">
-          <h3 class="text-lg leading-6 font-medium text-gray-900">Product Management</h3>
+          <h3 class="text-lg leading-6 font-medium text-gray-900">Inventory Management</h3>
           <button class="bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand/90 transition-colors">
-            Add New Product
+            Add New Item
           </button>
         </div>
         
@@ -358,25 +369,27 @@ defmodule LicoriceLaneWeb.AdminLive do
           <div class="flex-1">
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder="Search inventory..."
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand"
             />
           </div>
           <select class="px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand">
             <option>All Categories</option>
-            <option>Black Licorice</option>
-            <option>Red Licorice</option>
-            <option>Mixed</option>
+            <option>Seating</option>
+            <option>Linens</option>
+            <option>Centerpieces</option>
+            <option>Lighting</option>
+            <option>Backdrops</option>
           </select>
         </div>
         
-    <!-- Products Table -->
+    <!-- Inventory Table -->
         <div class="overflow-hidden">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Product
+                  Item
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Category
@@ -393,20 +406,28 @@ defmodule LicoriceLaneWeb.AdminLive do
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <tr>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="text-sm font-medium text-gray-900">Classic Dutch Black Licorice</div>
-                  <div class="text-sm text-gray-500">Traditional salt licorice</div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Black</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">45</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$8.99</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  <button class="text-brand hover:text-brand/80">Edit</button>
-                  <button class="text-red-600 hover:text-red-900">Delete</button>
-                </td>
-              </tr>
-              <!-- More rows would go here -->
+              <%= for item <- @low_stock_items do %>
+                <tr>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">{item.name}</div>
+                    <div class="text-sm text-gray-500">Event decor item</div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {String.capitalize(item.category)}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class={"text-sm #{if item.current_stock <= item.min_stock, do: "text-red-600 font-medium", else: "text-gray-900"}"}>
+                      {item.current_stock}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$25.00</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <button class="text-brand hover:text-brand/80">Edit</button>
+                    <button class="text-red-600 hover:text-red-900">Delete</button>
+                  </td>
+                </tr>
+              <% end %>
+              <!-- Additional inventory items would be listed here -->
             </tbody>
           </table>
         </div>
@@ -415,20 +436,20 @@ defmodule LicoriceLaneWeb.AdminLive do
     """
   end
 
-  defp render_orders(assigns) do
+  defp render_bookings(assigns) do
     ~H"""
     <div class="bg-white shadow rounded-lg">
       <div class="px-4 py-5 sm:p-6">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Order Management</h3>
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Booking Management</h3>
         
-    <!-- Order Filters -->
+    <!-- Booking Filters -->
         <div class="flex flex-col sm:flex-row gap-4 mb-6">
           <select class="px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand">
-            <option>All Orders</option>
+            <option>All Bookings</option>
             <option>Pending</option>
-            <option>Processing</option>
-            <option>Shipped</option>
-            <option>Delivered</option>
+            <option>Confirmed</option>
+            <option>Setup</option>
+            <option>Completed</option>
           </select>
           <input
             type="date"
@@ -436,19 +457,22 @@ defmodule LicoriceLaneWeb.AdminLive do
           />
         </div>
         
-    <!-- Orders Table -->
+    <!-- Bookings Table -->
         <div class="overflow-hidden">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Order ID
+                  Booking ID
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
+                  Client
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
+                  Event Type
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Event Date
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total
@@ -462,17 +486,22 @@ defmodule LicoriceLaneWeb.AdminLive do
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <%= for order <- @recent_orders do %>
+              <%= for booking <- @recent_bookings do %>
                 <tr>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {order.id}
+                    {booking.id}
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.customer}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.date}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.total}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {booking.customer}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {booking.event_type}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{booking.date}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{booking.total}</td>
                   <td class="px-6 py-4 whitespace-nowrap">
-                    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{order_status_class(order.status)}"}>
-                      {String.capitalize(order.status)}
+                    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{booking_status_class(booking.status)}"}>
+                      {String.capitalize(booking.status)}
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
@@ -489,11 +518,11 @@ defmodule LicoriceLaneWeb.AdminLive do
     """
   end
 
-  defp render_customers(assigns) do
+  defp render_clients(assigns) do
     ~H"""
     <div class="bg-white shadow rounded-lg">
       <div class="px-4 py-5 sm:p-6">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Customer Management</h3>
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">Client Management</h3>
 
         <div class="text-center py-12">
           <svg
@@ -509,13 +538,19 @@ defmodule LicoriceLaneWeb.AdminLive do
               d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
             />
           </svg>
-          <h3 class="mt-2 text-sm font-medium text-gray-900">Customer Management</h3>
-          <p class="mt-1 text-sm text-gray-500">Customer management features coming soon.</p>
+          <h3 class="mt-2 text-sm font-medium text-gray-900">Client Management</h3>
+          <p class="mt-1 text-sm text-gray-500">Client management features coming soon.</p>
         </div>
       </div>
     </div>
     """
   end
+
+  defp booking_status_class("pending"), do: "bg-yellow-100 text-yellow-800"
+  defp booking_status_class("confirmed"), do: "bg-blue-100 text-blue-800"
+  defp booking_status_class("setup"), do: "bg-purple-100 text-purple-800"
+  defp booking_status_class("completed"), do: "bg-green-100 text-green-800"
+  defp booking_status_class(_), do: "bg-gray-100 text-gray-800"
 
   defp order_status_class("pending"), do: "bg-yellow-100 text-yellow-800"
   defp order_status_class("processing"), do: "bg-blue-100 text-blue-800"
