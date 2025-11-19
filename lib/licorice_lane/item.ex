@@ -8,6 +8,8 @@ defmodule LicoriceLane.Item do
     field :item_type, Ecto.Enum, values: [:single, :bulk]
     field :rental_price, :decimal
 
+    field :image_path, :string
+
     timestamps(type: :utc_datetime)
   end
 
