@@ -551,10 +551,4 @@ defmodule LicoriceLaneWeb.AdminLive do
   defp booking_status_class("setup"), do: "bg-purple-100 text-purple-800"
   defp booking_status_class("completed"), do: "bg-green-100 text-green-800"
   defp booking_status_class(_), do: "bg-gray-100 text-gray-800"
-
-  defp order_status_class("pending"), do: "bg-yellow-100 text-yellow-800"
-  defp order_status_class("processing"), do: "bg-blue-100 text-blue-800"
-  defp order_status_class("shipped"), do: "bg-green-100 text-green-800"
-  defp order_status_class("delivered"), do: "bg-green-100 text-green-800"
-  defp order_status_class(_), do: "bg-gray-100 text-gray-800"
 end
