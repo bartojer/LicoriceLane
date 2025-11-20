@@ -10,6 +10,8 @@ defmodule LicoriceLane.Customer do
     field :billing_address, :string
     field :notes, :string
 
+    has_many :locations, LicoriceLane.Location
+
     timestamps(type: :utc_datetime)
   end
 

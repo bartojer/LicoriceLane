@@ -4,7 +4,8 @@ defmodule LicoriceLane.Location do
 
   schema "locations" do
     field :name, :string
-    field :customer_id, :id
+
+    belongs_to :customer, LicoriceLane.Customer
 
     timestamps(type: :utc_datetime)
   end
@@ -12,7 +13,7 @@ defmodule LicoriceLane.Location do
   @doc false
   def changeset(location, attrs) do
     location
-    |> cast(attrs, [:name])
+    |> cast(attrs, [:name, :customer_id])
     |> validate_required([:name])
   end
 end

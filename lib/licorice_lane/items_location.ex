@@ -4,8 +4,11 @@ defmodule LicoriceLane.ItemsLocation do
 
   schema "items_locations" do
     field :quantity, :integer
-    field :item_id, :id
-    field :location_id, :id
+    # field :item_id, :id
+    # field :location_id, :id
+
+    belongs_to :location, LicoriceLane.Location
+    belongs_to :item, LicoriceLane.Item
 
     timestamps(type: :utc_datetime)
   end
@@ -13,7 +16,7 @@ defmodule LicoriceLane.ItemsLocation do
   @doc false
   def changeset(items_location, attrs) do
     items_location
-    |> cast(attrs, [:quantity])
-    |> validate_required([:quantity])
+    |> cast(attrs, [:quantity, :item_id, :location_id])
+    |> validate_required([:quantity, :item_id, :location_id])
   end
 end
