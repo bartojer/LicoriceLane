@@ -56,12 +56,14 @@ IO.puts("Creating locations...")
 location1 =
   Repo.insert!(%Location{
     name: "Main Warehouse",
+    location_type: :warehouse,
     customer_id: nil
   })
 
 location2 =
   Repo.insert!(%Location{
     name: "Sunshine Events - Downtown Venue",
+    location_type: :customer,
     customer_id: customer1.id
   })
 
@@ -72,6 +74,7 @@ item_chair =
   Repo.insert!(%Item{
     name: "Chiavari Chair - Gold",
     description: "Elegant gold chiavari chair, perfect for weddings and formal events",
+    category: :tableware,
     item_type: :single,
     rental_price: Decimal.new("8.50"),
     image_path: "images/placeholder.jpg"
@@ -81,6 +84,7 @@ item_table =
   Repo.insert!(%Item{
     name: "Round Table - 60 inch",
     description: "Round banquet table, seats 8-10 guests comfortably",
+    category: :tableware,
     item_type: :single,
     rental_price: Decimal.new("15.00"),
     image_path: "images/placeholder.jpg"
@@ -90,6 +94,7 @@ item_chandelier =
   Repo.insert!(%Item{
     name: "Crystal Chandelier",
     description: "Stunning crystal chandelier centerpiece for luxury events",
+    category: :electric_light,
     item_type: :single,
     rental_price: Decimal.new("125.00"),
     image_path: "images/placeholder.jpg"
@@ -99,6 +104,7 @@ item_arch =
   Repo.insert!(%Item{
     name: "Wedding Arch - White",
     description: "Beautiful white wooden wedding arch with floral decorations",
+    category: :tableware,
     item_type: :single,
     rental_price: Decimal.new("85.00"),
     image_path: "images/placeholder.jpg"
@@ -109,6 +115,7 @@ item_napkins =
   Repo.insert!(%Item{
     name: "Linen Napkins - White",
     description: "Premium white linen napkins, sold in sets of 10",
+    category: :linen,
     item_type: :bulk,
     rental_price: Decimal.new("1.25"),
     image_path: "images/placeholder.jpg"
@@ -118,6 +125,7 @@ item_plates =
   Repo.insert!(%Item{
     name: "Dinner Plates - White Porcelain",
     description: "Classic white porcelain dinner plates, 10-inch diameter",
+    category: :tableware,
     item_type: :bulk,
     rental_price: Decimal.new("2.00"),
     image_path: "images/placeholder.jpg"
@@ -127,6 +135,7 @@ item_glassware =
   Repo.insert!(%Item{
     name: "Wine Glasses - Crystal",
     description: "Elegant crystal wine glasses, 12 oz capacity",
+    category: :tableware,
     item_type: :bulk,
     rental_price: Decimal.new("1.75"),
     image_path: "images/placeholder.jpg"
@@ -136,6 +145,7 @@ item_tablecloths =
   Repo.insert!(%Item{
     name: "Tablecloths - Ivory",
     description: "Ivory polyester tablecloths, 90x132 inch for rectangular tables",
+    category: :linen,
     item_type: :bulk,
     rental_price: Decimal.new("8.00"),
     image_path: "images/placeholder.jpg"
@@ -151,6 +161,7 @@ item_chair2 =
   Repo.insert!(%Item{
     name: "Chiavari Chair - Gold",
     description: "Elegant gold chiavari chair, perfect for weddings and formal events",
+    category: :tableware,
     item_type: :single,
     rental_price: Decimal.new("8.50"),
     image_path: "images/placeholder.jpg"

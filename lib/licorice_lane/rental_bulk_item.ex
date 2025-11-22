@@ -4,8 +4,11 @@ defmodule LicoriceLane.RentalBulkItem do
 
   schema "rental_bulk_items" do
     field :quantity, :integer
-    field :rental_id, :id
-    field :item_id, :id
+    belongs_to :rental, LicoriceLane.Rental
+    belongs_to :item, LicoriceLane.Item
+
+    # field :rental_id, :id
+    # field :item_id, :id
 
     timestamps(type: :utc_datetime)
   end
@@ -13,7 +16,7 @@ defmodule LicoriceLane.RentalBulkItem do
   @doc false
   def changeset(rental_bulk_item, attrs) do
     rental_bulk_item
-    |> cast(attrs, [:quantity])
-    |> validate_required([:quantity])
+    |> cast(attrs, [:quantity, :rental_id, :item_id])
+    |> validate_required([:quantity, :rental_id, :item_id])
   end
 end
