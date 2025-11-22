@@ -29,8 +29,8 @@ defmodule LicoriceLaneWeb.InventoryLive do
             Discover our elegant collection of event decor, tableware, and ambiance essentials
           </p>
         </div>
-
-        <!-- Filter/Search Section -->
+        
+    <!-- Filter/Search Section -->
         <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-between items-center">
           <div class="flex gap-2">
             <button
@@ -52,7 +52,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
               Tableware
             </button>
             <button
-              phx-click="show_linens"
+              phx-click="show_linen"
               class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >
               Linens
@@ -79,8 +79,8 @@ defmodule LicoriceLaneWeb.InventoryLive do
             </div>
           </form>
         </div>
-
-        <!-- Inventory Grid -->
+        
+    <!-- Inventory Grid -->
         <div
           class="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           id="items"

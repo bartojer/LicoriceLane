@@ -77,7 +77,7 @@ item_chair =
     category: :tableware,
     item_type: :single,
     rental_price: Decimal.new("8.50"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 item_table =
@@ -87,7 +87,7 @@ item_table =
     category: :tableware,
     item_type: :single,
     rental_price: Decimal.new("15.00"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 item_chandelier =
@@ -97,7 +97,7 @@ item_chandelier =
     category: :electric_light,
     item_type: :single,
     rental_price: Decimal.new("125.00"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 item_arch =
@@ -107,7 +107,7 @@ item_arch =
     category: :tableware,
     item_type: :single,
     rental_price: Decimal.new("85.00"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 # Bulk Items (quantity-based rental items)
@@ -118,7 +118,7 @@ item_napkins =
     category: :linen,
     item_type: :bulk,
     rental_price: Decimal.new("1.25"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 item_plates =
@@ -128,7 +128,7 @@ item_plates =
     category: :tableware,
     item_type: :bulk,
     rental_price: Decimal.new("2.00"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 item_glassware =
@@ -138,7 +138,7 @@ item_glassware =
     category: :tableware,
     item_type: :bulk,
     rental_price: Decimal.new("1.75"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 item_tablecloths =
@@ -148,7 +148,7 @@ item_tablecloths =
     category: :linen,
     item_type: :bulk,
     rental_price: Decimal.new("8.00"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 IO.puts("Creating single item instances...")
@@ -164,7 +164,7 @@ item_chair2 =
     category: :tableware,
     item_type: :single,
     rental_price: Decimal.new("8.50"),
-    image_path: "images/placeholder.jpg"
+    image_path: "images/placeholder.png"
   })
 
 _single_chair1 =
