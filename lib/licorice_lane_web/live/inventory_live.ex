@@ -4,7 +4,13 @@ defmodule LicoriceLaneWeb.InventoryLive do
   alias LicoriceLane.Inventory
   import LicoriceLaneWeb.InventoryComponents
 
+  @impl true
   def mount(_params, _session, socket) do
+    # Subscribe to inventory updates for real-time changes
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "inventory:updates")
+    end
+
     items = Inventory.list_items()
 
     socket =
@@ -16,6 +22,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
     {:ok, socket}
   end
 
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="px-4 py-10 sm:px-6 lg:px-8">
@@ -93,6 +100,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
     """
   end
 
+  @impl true
   def handle_event("search", %{"search_term" => search_term}, socket) do
     items = get_filtered_items(socket.assigns.selected_category, search_term)
 
@@ -121,6 +129,18 @@ defmodule LicoriceLaneWeb.InventoryLive do
     socket =
       socket
       |> assign(:selected_category, category)
+      |> stream(:items, items, reset: true)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:inventory_updated, _item_id}, socket) do
+    # Reload items when inventory changes from admin
+    items = get_filtered_items(socket.assigns.selected_category, socket.assigns.search_term)
+
+    socket =
+      socket
       |> stream(:items, items, reset: true)
 
     {:noreply, socket}

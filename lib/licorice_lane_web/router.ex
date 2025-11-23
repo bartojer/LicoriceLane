@@ -23,7 +23,7 @@ defmodule LicoriceLaneWeb.Router do
     get "/about", PageController, :about
 
     live "/inventory", InventoryLive
-    live "/admin", AdminLive
+    live "/admin", Admin.AdminLive
   end
 
   # Other scopes may use custom stacks.

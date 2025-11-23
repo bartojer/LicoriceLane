@@ -90,6 +90,36 @@ defmodule LicoriceLaneWeb.CoreComponents do
   end
 
   @doc """
+  Renders a status badge for rental/booking statuses.
+  """
+  attr :status, :atom, required: true, doc: "The status to display"
+  attr :class, :string, default: nil, doc: "Additional CSS classes"
+
+  def status_badge(assigns) do
+    ~H"""
+    <span class={[
+      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+      status_badge_class(@status),
+      @class
+    ]}>
+      {status_label(@status)}
+    </span>
+    """
+  end
+
+  defp status_badge_class(:pending), do: "bg-yellow-100 text-yellow-800"
+  defp status_badge_class(:confirmed), do: "bg-blue-100 text-blue-800"
+  defp status_badge_class(:active), do: "bg-green-100 text-green-800"
+  defp status_badge_class(:setup), do: "bg-purple-100 text-purple-800"
+  defp status_badge_class(:completed), do: "bg-gray-100 text-gray-800"
+  defp status_badge_class(:returned), do: "bg-gray-100 text-gray-800"
+  defp status_badge_class(:late), do: "bg-red-100 text-red-800"
+  defp status_badge_class(:cancelled), do: "bg-gray-100 text-gray-600"
+  defp status_badge_class(_), do: "bg-gray-100 text-gray-800"
+
+  defp status_label(status), do: status |> to_string() |> String.capitalize()
+
+  @doc """
   Renders flash notices.
 
   ## Examples
