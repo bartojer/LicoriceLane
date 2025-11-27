@@ -36,7 +36,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
             Discover our elegant collection of event decor, tableware, and ambiance essentials
           </p>
         </div>
-        
+
     <!-- Filter/Search Section -->
         <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-between items-center">
           <div class="flex gap-2">
@@ -86,7 +86,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
             </div>
           </form>
         </div>
-        
+
     <!-- Inventory Grid -->
         <div
           class="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
@@ -102,7 +102,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
 
   @impl true
   def handle_event("search", %{"search_term" => search_term}, socket) do
-    items = get_filtered_items(socket.assigns.selected_category, search_term)
+    items = Inventory.list_filtered_items(socket.assigns.selected_category, search_term)
 
     socket =
       socket
@@ -113,7 +113,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
   end
 
   def handle_event("show_all", _payload, socket) do
-    items = get_filtered_items("all", socket.assigns.search_term)
+    items = Inventory.list_filtered_items("all", socket.assigns.search_term)
 
     socket =
       socket
@@ -123,8 +123,19 @@ defmodule LicoriceLaneWeb.InventoryLive do
     {:noreply, socket}
   end
 
+  def handle_event("show_lighting", _payload, socket) do
+    items = Inventory.list_filtered_items("lighting", socket.assigns.search_term)
+
+    socket =
+      socket
+      |> assign(:selected_category, "lighting")
+      |> stream(:items, items, reset: true)
+
+    {:noreply, socket}
+  end
+
   def handle_event("show_" <> category, _payload, socket) do
-    items = get_filtered_items(category, socket.assigns.search_term)
+    items = Inventory.list_filtered_items(category, socket.assigns.search_term)
 
     socket =
       socket
@@ -137,23 +148,12 @@ defmodule LicoriceLaneWeb.InventoryLive do
   @impl true
   def handle_info({:inventory_updated, _item_id}, socket) do
     # Reload items when inventory changes from admin
-    items = get_filtered_items(socket.assigns.selected_category, socket.assigns.search_term)
+    items = Inventory.list_filtered_items(socket.assigns.selected_category, socket.assigns.search_term)
 
     socket =
       socket
       |> stream(:items, items, reset: true)
 
     {:noreply, socket}
-  end
-
-  # Helper to get filtered items based on category and search term
-  defp get_filtered_items("all", search_term) do
-    Inventory.list_items()
-    |> Inventory.search_items(search_term)
-  end
-
-  defp get_filtered_items(category, search_term) do
-    Inventory.list_items_by_category(category)
-    |> Inventory.search_items(search_term)
   end
 end

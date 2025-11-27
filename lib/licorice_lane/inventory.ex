@@ -8,62 +8,133 @@ defmodule LicoriceLane.Inventory do
   @topic "inventory:updates"
 
   @doc """
+  Normalizes category filter input into a list of category atoms.
+
+  Special cases:
+  - "all" or :all -> :all (no category filtering)
+  - "lighting" -> [:candle, :electric_light]
+  - [] -> logs warning and returns [] (will return no results)
+  - Single string/atom -> converts to list
+  """
+  def normalize_category_filter("all"), do: :all
+  def normalize_category_filter(:all), do: :all
+  def normalize_category_filter("lighting"), do: [:candle, :electric_light]
+  def normalize_category_filter(:lighting), do: [:candle, :electric_light]
+
+  def normalize_category_filter([]) do
+    require Logger
+    Logger.warning("No categories selected for filtering. This will return no items.")
+    []
+  end
+
+  def normalize_category_filter(categories) when is_list(categories) do
+    Enum.map(categories, fn
+      cat when is_atom(cat) -> cat
+      cat when is_binary(cat) -> String.to_existing_atom(cat)
+    end)
+  end
+
+  def normalize_category_filter(category) when is_binary(category) do
+    [String.to_existing_atom(category)]
+  end
+
+  def normalize_category_filter(category) when is_atom(category) do
+    [category]
+  end
+
+  @doc """
+  Builds the base query for items with standard preloads.
+  """
+  def build_items_query do
+    from(i in Item,
+      preload: [
+        :single_item,
+        items_locations: :location
+      ]
+    )
+  end
+
+  @doc """
   Returns all items with necessary preloads for display.
-  Preloads single_item, items_locations with their locations for warehouse quantity calculation.
   """
   def list_items do
-    Item
-    |> preload([
-      :single_item,
-      items_locations: :location
-    ])
+    build_items_query()
     |> Repo.all()
   end
 
   @doc """
-  Returns items filtered by category.
-  Special case: "lighting" returns both :candle and :electric_light categories.
+  Adds category filtering to a query.
+  Returns query unchanged if categories is :all or [].
   """
-  def list_items_by_category("lighting") do
-    Item
-    |> where([i], i.category in [:candle, :electric_light])
-    |> preload([
-      :single_item,
-      items_locations: :location
-    ])
-    |> Repo.all()
-  end
+  def filter_by_categories(query, :all), do: query
+  def filter_by_categories(query, []), do: query
 
-  def list_items_by_category(category) when is_atom(category) do
-    Item
-    |> where([i], i.category == ^category)
-    |> preload([
-      :single_item,
-      items_locations: :location
-    ])
-    |> Repo.all()
-  end
-
-  def list_items_by_category(category) when is_binary(category) do
-    category_atom = String.to_existing_atom(category)
-    list_items_by_category(category_atom)
+  def filter_by_categories(query, categories) when is_list(categories) do
+    from(i in query, where: i.category in ^categories)
   end
 
   @doc """
-  Filters a list of items by search term (searches name and description).
-  Case-insensitive search.
+  Adds search term filtering to a query.
+  Searches in item name and description using AND logic for multiple terms.
+  Empty string or whitespace-only returns query unchanged.
   """
-  def search_items(items, "") do
-    items
+  def filter_by_search_term(query, search_term) when is_binary(search_term) do
+    trimmed = String.trim(search_term)
+
+    if trimmed == "" do
+      query
+    else
+      terms =
+        trimmed
+        |> String.split(~r/\s+/, trim: true)
+        |> Enum.map(&String.downcase/1)
+
+      Enum.reduce(terms, query, fn term, acc_query ->
+        pattern = "%#{term}%"
+
+        from(i in acc_query,
+          where:
+            ilike(i.name, ^pattern) or
+              ilike(i.description, ^pattern)
+        )
+      end)
+    end
   end
 
-  def search_items(items, search_term) when is_binary(search_term) do
-    search_term = String.downcase(search_term)
+  def filter_by_search_term(query, _), do: query
 
-    Enum.filter(items, fn item ->
-      String.contains?(String.downcase(item.name), search_term) ||
-        String.contains?(String.downcase(item.description || ""), search_term)
-    end)
+  @doc """
+  Returns items filtered by categories.
+  Categories are normalized before querying.
+  """
+  def list_items_by_categories(categories) do
+    normalized = normalize_category_filter(categories)
+
+    build_items_query()
+    |> filter_by_categories(normalized)
+    |> Repo.all()
+  end
+
+  @doc """
+  Coordinator function: Returns items filtered by categories and search term.
+  All filtering happens at the DB level for optimal performance.
+
+  ## Parameters
+    - categories: Can be "all", :all, "lighting", a single category, or list of categories
+    - search_term: String to search in name and description (uses AND logic for multiple words)
+
+  ## Examples
+      list_filtered_items("all", "gold taper")
+      list_filtered_items([:candle, :electric_light], "vintage")
+      list_filtered_items("lighting", "")
+  """
+  def list_filtered_items(categories, search_term \\ "") do
+    normalized_categories = normalize_category_filter(categories)
+
+    build_items_query()
+    |> filter_by_categories(normalized_categories)
+    |> filter_by_search_term(search_term)
+    |> Repo.all()
   end
 
   def list_all_inventory do

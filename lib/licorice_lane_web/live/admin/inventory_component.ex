@@ -10,7 +10,9 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
       |> assign(assigns)
       |> assign(:search_term, "")
       |> assign(:selected_category, "all")
-      |> stream_configure(:items, dom_id: fn item_data -> "inventory-item-#{item_data.item.id}" end)
+      |> stream_configure(:items,
+        dom_id: fn item_data -> "inventory-item-#{item_data.item.id}" end
+      )
       |> load_inventory()
 
     {:ok, socket}
@@ -18,7 +20,7 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
 
   defp load_inventory(socket) do
     items =
-      get_filtered_items(
+      Inventory.list_filtered_items(
         socket.assigns.selected_category,
         socket.assigns.search_term
       )
@@ -92,21 +94,23 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
               />
             </form>
           </div>
-          <select
-            phx-change="filter_category"
-            name="category"
-            phx-target={@myself}
-            class="px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand"
-          >
-            <option value="all" selected={@selected_category == "all"}>All Categories</option>
-            <option value="candle" selected={@selected_category == "candle"}>Candles</option>
-            <option value="electric_light" selected={@selected_category == "electric_light"}>
-              Electric Lights
-            </option>
-            <option value="tableware" selected={@selected_category == "tableware"}>Tableware</option>
-            <option value="linen" selected={@selected_category == "linen"}>Linens</option>
-            <option value="tray" selected={@selected_category == "tray"}>Trays</option>
-          </select>
+          <form phx-change="filter_category" phx-target={@myself}>
+            <select
+              name="category"
+              class="px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand"
+            >
+              <option value="all" selected={@selected_category == "all"}>All Categories</option>
+              <option value="candle" selected={@selected_category == "candle"}>Candles</option>
+              <option value="electric_light" selected={@selected_category == "electric_light"}>
+                Electric Lights
+              </option>
+              <option value="tableware" selected={@selected_category == "tableware"}>
+                Tableware
+              </option>
+              <option value="linen" selected={@selected_category == "linen"}>Linens</option>
+              <option value="tray" selected={@selected_category == "tray"}>Trays</option>
+            </select>
+          </form>
         </div>
         
     <!-- Inventory Table -->
@@ -190,16 +194,6 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
       </div>
     </div>
     """
-  end
-
-  defp get_filtered_items("all", search_term) do
-    Inventory.list_items()
-    |> Inventory.search_items(search_term)
-  end
-
-  defp get_filtered_items(category, search_term) do
-    Inventory.list_items_by_category(category)
-    |> Inventory.search_items(search_term)
   end
 
   defp category_label(:candle), do: "Candles"
