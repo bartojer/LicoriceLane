@@ -1,4 +1,4 @@
-defmodule LicoriceLane.ItemsLocation do
+defmodule LicoriceLane.Locations.ItemsLocation do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -7,8 +7,8 @@ defmodule LicoriceLane.ItemsLocation do
     # field :item_id, :id
     # field :location_id, :id
 
-    belongs_to :location, LicoriceLane.Location
-    belongs_to :item, LicoriceLane.Item
+    belongs_to :location, LicoriceLane.Locations.Location
+    belongs_to :item, LicoriceLane.Items.Item
 
     timestamps(type: :utc_datetime)
   end

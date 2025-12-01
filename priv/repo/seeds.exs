@@ -13,8 +13,10 @@
 import Ecto.Query
 
 alias LicoriceLane.Repo
-alias LicoriceLane.{Customer, Location, Item, SingleItem, Rental}
-alias LicoriceLane.{ItemsLocation, RentalSingleItem, RentalBulkItem, LocationHistory}
+alias LicoriceLane.Customers.Customer
+alias LicoriceLane.Locations.{Location, ItemsLocation, LocationHistory}
+alias LicoriceLane.Items.{Item, SingleItem}
+alias LicoriceLane.Rentals.{Rental, RentalSingleItem, RentalBulkItem}
 
 # Clear existing data (optional - comment out if you want to keep existing data)
 Repo.delete_all(LocationHistory)

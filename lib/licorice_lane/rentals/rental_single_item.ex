@@ -1,13 +1,10 @@
-defmodule LicoriceLane.RentalSingleItem do
+defmodule LicoriceLane.Rentals.RentalSingleItem do
   use Ecto.Schema
   import Ecto.Changeset
 
   schema "rental_single_items" do
-    belongs_to :rental, LicoriceLane.Rental
-    belongs_to :single_item, LicoriceLane.SingleItem
-
-    # field :rental_id, :id
-    # field :single_item_id, :id
+    belongs_to :rental, LicoriceLane.Rentals.Rental
+    belongs_to :single_item, LicoriceLane.Items.SingleItem
 
     timestamps(type: :utc_datetime)
   end

@@ -1,7 +1,7 @@
 defmodule LicoriceLaneWeb.InventoryComponents do
   use Phoenix.Component
 
-  attr :item, LicoriceLane.Item, required: true
+  attr :item, LicoriceLane.Items.Item, required: true
   attr :id, :string, required: true
 
   def inventory_card(assigns) do

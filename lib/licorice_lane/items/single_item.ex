@@ -1,4 +1,4 @@
-defmodule LicoriceLane.SingleItem do
+defmodule LicoriceLane.Items.SingleItem do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -10,9 +10,9 @@ defmodule LicoriceLane.SingleItem do
 
     field :condition, :string
 
-    belongs_to :location, LicoriceLane.Location
+    belongs_to :location, LicoriceLane.Locations.Location
 
-    belongs_to :item, LicoriceLane.Item,
+    belongs_to :item, LicoriceLane.Items.Item,
       foreign_key: :id,
       define_field: false
 

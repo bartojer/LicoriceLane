@@ -4,7 +4,8 @@ defmodule LicoriceLane.Customers do
   """
 
   import Ecto.Query
-  alias LicoriceLane.{Repo, Customer}
+  alias LicoriceLane.Repo
+  alias LicoriceLane.Customers.Customer
 
   @doc """
   Returns all customers ordered by name.

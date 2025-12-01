@@ -1,4 +1,4 @@
-defmodule LicoriceLane.LocationHistory do
+defmodule LicoriceLane.Locations.LocationHistory do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -6,10 +6,10 @@ defmodule LicoriceLane.LocationHistory do
     field :quantity, :integer
     field :ts, :utc_datetime
 
-    belongs_to :item, LicoriceLane.Item
-    belongs_to :from_location, LicoriceLane.Location
-    belongs_to :to_location, LicoriceLane.Location
-    belongs_to :rental, LicoriceLane.Rental
+    belongs_to :item, LicoriceLane.Items.Item
+    belongs_to :from_location, LicoriceLane.Locations.Location
+    belongs_to :to_location, LicoriceLane.Locations.Location
+    belongs_to :rental, LicoriceLane.Rentals.Rental
 
     # field :item_id, :id
     # field :from_location_id, :id

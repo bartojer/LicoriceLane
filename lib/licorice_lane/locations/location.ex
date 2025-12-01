@@ -1,4 +1,4 @@
-defmodule LicoriceLane.Location do
+defmodule LicoriceLane.Locations.Location do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -6,7 +6,7 @@ defmodule LicoriceLane.Location do
     field :name, :string
     field :location_type, Ecto.Enum, values: [:customer, :warehouse], default: :warehouse
 
-    belongs_to :customer, LicoriceLane.Customer
+    belongs_to :customer, LicoriceLane.Customers.Customer
 
     timestamps(type: :utc_datetime)
   end

@@ -4,7 +4,8 @@ defmodule LicoriceLane.Rentals do
   """
 
   import Ecto.Query
-  alias LicoriceLane.{Repo, Rental}
+  alias LicoriceLane.Repo
+  alias LicoriceLane.Rentals.Rental
 
   @doc """
   Returns all rentals with customer preloaded.

@@ -1,4 +1,4 @@
-defmodule LicoriceLane.Rental do
+defmodule LicoriceLane.Rentals.Rental do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -15,9 +15,9 @@ defmodule LicoriceLane.Rental do
     field :return_by, :utc_datetime
     field :returned_at, :utc_datetime
 
-    belongs_to :customer, LicoriceLane.Customer
-    has_many :rental_single_items, LicoriceLane.RentalSingleItem
-    has_many :rental_bulk_items, LicoriceLane.RentalBulkItem
+    belongs_to :customer, LicoriceLane.Customers.Customer
+    has_many :rental_single_items, LicoriceLane.Rentals.RentalSingleItem
+    has_many :rental_bulk_items, LicoriceLane.Rentals.RentalBulkItem
 
     timestamps(type: :utc_datetime)
   end

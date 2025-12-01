@@ -1,7 +1,7 @@
 defmodule LicoriceLane.Inventory do
   import Ecto.Query
 
-  alias LicoriceLane.Item
+  alias LicoriceLane.Items.Item
   alias LicoriceLane.Repo
 
   @pubsub LicoriceLane.PubSub
@@ -149,7 +149,7 @@ defmodule LicoriceLane.Inventory do
   """
   def list_low_stock_items do
     warehouse_subquery =
-      from(il in LicoriceLane.ItemsLocation,
+      from(il in LicoriceLane.Locations.ItemsLocation,
         join: l in assoc(il, :location),
         where: l.location_type == :warehouse,
         group_by: il.item_id,
@@ -173,7 +173,7 @@ defmodule LicoriceLane.Inventory do
   Returns warehouse quantities for a specific item, grouped by warehouse location.
   """
   def get_warehouse_quantities(item_id) do
-    from(il in LicoriceLane.ItemsLocation,
+    from(il in LicoriceLane.Locations.ItemsLocation,
       join: l in assoc(il, :location),
       where: il.item_id == ^item_id and l.location_type == :warehouse,
       preload: [:location],
@@ -186,7 +186,7 @@ defmodule LicoriceLane.Inventory do
   Returns warehouse quantities for all items, grouped by item and location.
   """
   def list_all_warehouse_quantities do
-    from(il in LicoriceLane.ItemsLocation,
+    from(il in LicoriceLane.Locations.ItemsLocation,
       join: l in assoc(il, :location),
       join: i in assoc(il, :item),
       where: l.location_type == :warehouse,

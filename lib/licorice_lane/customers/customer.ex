@@ -1,4 +1,4 @@
-defmodule LicoriceLane.Customer do
+defmodule LicoriceLane.Customers.Customer do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -10,7 +10,7 @@ defmodule LicoriceLane.Customer do
     field :billing_address, :string
     field :notes, :string
 
-    has_many :locations, LicoriceLane.Location
+    has_many :locations, LicoriceLane.Locations.Location
 
     timestamps(type: :utc_datetime)
   end
