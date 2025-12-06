@@ -16,13 +16,15 @@ defmodule LicoriceLane.Items.SingleItem do
       foreign_key: :id,
       define_field: false
 
+    has_many :rental_single_items, LicoriceLane.Rentals.RentalSingleItem
+
     timestamps(type: :utc_datetime)
   end
 
   @doc false
   def changeset(single_item, attrs) do
     single_item
-    |> cast(attrs, [:condition, :status])
-    |> validate_required([:condition, :status])
+    |> cast(attrs, [:id, :condition, :status, :location_id])
+    |> validate_required([:id, :condition, :status, :location_id])
   end
 end

@@ -9,7 +9,7 @@ defmodule LicoriceLane.Items.Item do
     field :item_type, Ecto.Enum, values: [:single, :bulk]
     field :rental_price, :decimal
     field :image_path, :string
-    field :min_stock, :integer, default: 10
+    field :min_stock, :integer, default: 0
     field :color, :string
 
     has_one :single_item, LicoriceLane.Items.SingleItem, foreign_key: :id
@@ -27,6 +27,7 @@ defmodule LicoriceLane.Items.Item do
     |> cast(attrs, [
       :name,
       :description,
+      :category,
       :item_type,
       :rental_price,
       :image_path,
@@ -35,5 +36,21 @@ defmodule LicoriceLane.Items.Item do
     ])
     |> validate_required([:name, :description, :item_type])
     |> validate_number(:min_stock, greater_than_or_equal_to: 0)
+    |> set_min_stock_for_item_type()
+  end
+
+  defp set_min_stock_for_item_type(changeset) do
+    case get_field(changeset, :item_type) do
+      :single ->
+        # Single items don't use min_stock for alerts, set to 0
+        put_change(changeset, :min_stock, 0)
+
+      :bulk ->
+        # Bulk items keep their min_stock value (default 10 from migration)
+        changeset
+
+      _ ->
+        changeset
+    end
   end
 end

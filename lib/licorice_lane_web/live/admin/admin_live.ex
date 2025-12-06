@@ -5,7 +5,8 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
     DashboardComponent,
     InventoryComponent,
     BookingsComponent,
-    ClientsComponent
+    ClientsComponent,
+    AddItemComponent
   }
 
   @impl true
@@ -28,6 +29,13 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
   end
 
   @impl true
+  def handle_info({:inventory_updated, _item_id}, socket) do
+    # Inventory updates are handled by child components (DashboardComponent, InventoryComponent)
+    # Just acknowledge the message here to prevent crashes
+    {:noreply, socket}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-gray-50">
@@ -40,7 +48,11 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
               <p class="mt-1 text-sm text-gray-500">Manage your event decor business</p>
             </div>
             <div class="flex items-center space-x-4">
-              <button class="bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand/90 transition-colors">
+              <button
+                phx-click="switch_tab"
+                phx-value-tab="add_item"
+                class="bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand/90 transition-colors"
+              >
                 Add Inventory Item
               </button>
               <div class="flex items-center space-x-2">
@@ -74,6 +86,13 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
             </button>
             <button
               phx-click="switch_tab"
+              phx-value-tab="add_item"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "add_item", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
+            >
+              Add Item
+            </button>
+            <button
+              phx-click="switch_tab"
               phx-value-tab="bookings"
               class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "bookings", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
             >
@@ -98,6 +117,10 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
 
         <%= if @active_tab == "inventory" do %>
           <.live_component module={InventoryComponent} id="inventory-component" />
+        <% end %>
+
+        <%= if @active_tab == "add_item" do %>
+          <.live_component module={AddItemComponent} id="add-item-component" />
         <% end %>
 
         <%= if @active_tab == "bookings" do %>

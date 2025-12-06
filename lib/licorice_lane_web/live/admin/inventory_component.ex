@@ -69,6 +69,11 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
     {:noreply, socket}
   end
 
+  def handle_event("switch_to_add_item", _params, socket) do
+    send(self(), {:switch_tab, "add_item"})
+    {:noreply, socket}
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -76,7 +81,11 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
       <div class="px-4 py-5 sm:p-6">
         <div class="flex justify-between items-center mb-6">
           <h3 class="text-lg leading-6 font-medium text-gray-900">Inventory Management</h3>
-          <button class="bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand/90 transition-colors">
+          <button
+            phx-click="switch_to_add_item"
+            phx-target={@myself}
+            class="bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand/90 transition-colors"
+          >
             Add New Item
           </button>
         </div>
