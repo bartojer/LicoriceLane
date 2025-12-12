@@ -1,15 +1,21 @@
 defmodule LicoriceLaneWeb.InventoryComponents do
   use Phoenix.Component
+  
+  use Phoenix.VerifiedRoutes,
+    endpoint: LicoriceLaneWeb.Endpoint,
+    router: LicoriceLaneWeb.Router,
+    statics: LicoriceLaneWeb.static_paths()
 
   attr :item, LicoriceLane.Items.Item, required: true
   attr :id, :string, required: true
 
   def inventory_card(assigns) do
     ~H"""
-    <div
-      id={@id}
-      class="group relative bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
-    >
+    <.link patch={~p"/inventory/#{@item.id}"} class="block">
+      <div
+        id={@id}
+        class="group relative bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
+      >
       <!-- Product Image -->
       <div class="aspect-square w-full overflow-hidden rounded-t-lg bg-gray-200">
         <%= if @item.image_path do %>
@@ -76,7 +82,8 @@ defmodule LicoriceLaneWeb.InventoryComponents do
           <% end %>
         </div>
       </div>
-    </div>
+      </div>
+    </.link>
     """
   end
 

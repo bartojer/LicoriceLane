@@ -3,6 +3,7 @@ defmodule LicoriceLane.Accounts.User do
   import Ecto.Changeset
 
   schema "users" do
+    field :admin, :boolean, default: false
     field :email, :string
     field :password, :string, virtual: true, redact: true
     field :hashed_password, :string, redact: true

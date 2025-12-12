@@ -25,8 +25,22 @@ defmodule LicoriceLaneWeb.Router do
     get "/faq", PageController, :faq
     get "/about", PageController, :about
 
-    live "/inventory", InventoryLive
-    live "/admin", Admin.AdminLive
+    live "/inventory", InventoryLive, :index
+    live "/inventory/:id", InventoryLive, :show
+    # live "/admin", Admin.AdminLive
+  end
+
+  scope "/", LicoriceLaneWeb do
+    pipe_through [:browser, :require_authentication, :require_admin]
+
+    live_session :admin,
+      on_mount: [
+        {LicoriceLaneWeb.UserAuth, :ensure_authenticated},
+        {LicoriceLaneWeb.UserAuth, :ensure_admin}
+      ] do
+      live "/admin", Admin.AdminLive, :index
+      # live "/admin/items/:id/edit"
+    end
   end
 
   # Other scopes may use custom stacks.
