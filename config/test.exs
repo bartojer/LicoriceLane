@@ -38,3 +38,15 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Configure Cloak encryption key for test environment
+config :licorice_lane, LicoriceLane.Vault,
+  ciphers: [
+    default:
+      {Cloak.Ciphers.AES.GCM,
+       tag: "AES.GCM.V1", key: Base.decode64!("KWP6Okjnv5xd+Mu9Wfpb183P+IETkrCBWt72VlTMpc0=")}
+  ]
+
+config :licorice_lane, LicoriceLane.Hashed.HMAC,
+  algorithm: :sha512,
+  secret: "test-hmac-secret-key-for-hashing-customer-data"

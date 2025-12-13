@@ -6,7 +6,8 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
     InventoryComponent,
     BookingsComponent,
     ClientsComponent,
-    AddItemComponent
+    AddItemComponent,
+    EditItemComponent
   }
 
   @impl true
@@ -14,6 +15,7 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
     socket =
       socket
       |> assign(:active_tab, "dashboard")
+      |> assign(:editing_item_id, nil)
 
     {:ok, socket}
   end
@@ -26,6 +28,16 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
   @impl true
   def handle_info({:switch_tab, tab}, socket) do
     {:noreply, assign(socket, :active_tab, tab)}
+  end
+
+  @impl true
+  def handle_info({:edit_item, item_id}, socket) do
+    socket =
+      socket
+      |> assign(:active_tab, "edit_item")
+      |> assign(:editing_item_id, item_id)
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -92,6 +104,14 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
               Add Item
             </button>
             <button
+              :if={@active_tab == "edit_item"}
+              phx-click="switch_tab"
+              phx-value-tab="edit_item"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "edit_item", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
+            >
+              Edit Item
+            </button>
+            <button
               phx-click="switch_tab"
               phx-value-tab="bookings"
               class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "bookings", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
@@ -121,6 +141,14 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
 
         <%= if @active_tab == "add_item" do %>
           <.live_component module={AddItemComponent} id="add-item-component" />
+        <% end %>
+
+        <%= if @active_tab == "edit_item" do %>
+          <.live_component
+            module={EditItemComponent}
+            id="edit-item-component"
+            item_id={@editing_item_id}
+          />
         <% end %>
 
         <%= if @active_tab == "bookings" do %>

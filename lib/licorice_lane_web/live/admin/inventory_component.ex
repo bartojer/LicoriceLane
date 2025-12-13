@@ -58,9 +58,8 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
     {:noreply, socket}
   end
 
-  def handle_event("edit_item", %{"item-id" => _item_id}, socket) do
-    # TODO: Implement edit functionality
-    # This could open a modal or navigate to an edit page
+  def handle_event("edit_item", %{"item-id" => item_id}, socket) do
+    send(self(), {:edit_item, String.to_integer(item_id)})
     {:noreply, socket}
   end
 

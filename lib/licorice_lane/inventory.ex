@@ -516,6 +516,24 @@ defmodule LicoriceLane.Inventory do
   end
 
   @doc """
+  Gets a single item by ID with full preloads.
+  Raises if not found.
+  """
+  def get_item!(id) do
+    Item
+    |> Repo.get!(id)
+    |> Repo.preload([:single_item, items_locations: :location])
+  end
+
+  @doc """
+  Returns a changeset for the given item.
+  Used for edit forms.
+  """
+  def change_item(%Item{} = item, attrs \\ %{}) do
+    Item.changeset(item, attrs)
+  end
+
+  @doc """
   Updates an item and broadcasts the update.
   """
   def update_item(%Item{} = item, attrs) do

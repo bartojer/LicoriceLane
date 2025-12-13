@@ -114,4 +114,31 @@ if config_env() == :prod do
   #     config :swoosh, :api_client, Swoosh.ApiClient.Hackney
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+
+  # ## Configuring Cloak encryption
+  #
+  # In production, the encryption key must be provided via environment variable.
+  # Generate a key with: openssl rand -base64 32
+  cloak_key =
+    System.get_env("CLOAK_KEY") ||
+      raise """
+      environment variable CLOAK_KEY is missing.
+      You can generate one by running: openssl rand -base64 32
+      """
+
+  config :licorice_lane, LicoriceLane.Vault,
+    ciphers: [
+      default: {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: Base.decode64!(cloak_key)}
+    ]
+
+  hmac_secret =
+    System.get_env("HMAC_SECRET") ||
+      raise """
+      environment variable HMAC_SECRET is missing.
+      You can generate one by running: openssl rand -base64 32
+      """
+
+  config :licorice_lane, LicoriceLane.Hashed.HMAC,
+    algorithm: :sha512,
+    secret: hmac_secret
 end

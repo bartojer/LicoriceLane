@@ -10,6 +10,7 @@ defmodule LicoriceLane.Application do
     children = [
       LicoriceLaneWeb.Telemetry,
       LicoriceLane.Repo,
+      LicoriceLane.Vault,
       {DNSCluster, query: Application.get_env(:licorice_lane, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: LicoriceLane.PubSub},
       # Start the Finch HTTP client for sending emails

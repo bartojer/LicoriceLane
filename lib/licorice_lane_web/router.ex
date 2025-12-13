@@ -21,7 +21,7 @@ defmodule LicoriceLaneWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
-    get "/contact", PageController, :contact
+    live "/contact", ContactLive, :index
     get "/faq", PageController, :faq
     get "/about", PageController, :about
 

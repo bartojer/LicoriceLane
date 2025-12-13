@@ -83,3 +83,15 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# Configure Cloak encryption key for development
+config :licorice_lane, LicoriceLane.Vault,
+  ciphers: [
+    default:
+      {Cloak.Ciphers.AES.GCM,
+       tag: "AES.GCM.V1", key: Base.decode64!("dI+lLFea3W44HOKjN6XctinCCIFILv5v+8Jtu8Vd2p8=")}
+  ]
+
+config :licorice_lane, LicoriceLane.Hashed.HMAC,
+  algorithm: :sha512,
+  secret: "dev-hmac-secret-key-for-hashing-customer-data"

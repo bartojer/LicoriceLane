@@ -32,8 +32,8 @@ Repo.delete_all(Customer)
 IO.puts("Creating customers...")
 
 # Customers
-customer1 =
-  Repo.insert!(%Customer{
+{:ok, customer1} =
+  LicoriceLane.Customers.create_customer(%{
     name: "Sunshine Events Co.",
     phone: "555-0123",
     email: "events@sunshine.com",
@@ -42,8 +42,8 @@ customer1 =
     notes: "Preferred customer - always pays on time"
   })
 
-customer2 =
-  Repo.insert!(%Customer{
+{:ok, customer2} =
+  LicoriceLane.Customers.create_customer(%{
     name: "Happy Party Planners",
     phone: "555-0456",
     email: "info@happyparty.com",
@@ -52,8 +52,8 @@ customer2 =
     notes: "Requires 24-hour notice for pickups"
   })
 
-customer3 =
-  Repo.insert!(%Customer{
+{:ok, customer3} =
+  LicoriceLane.Customers.create_customer(%{
     name: "Elite Weddings LLC",
     phone: "555-0789",
     email: "coordinator@eliteweddings.com",
@@ -62,8 +62,8 @@ customer3 =
     notes: "High-end wedding specialist"
   })
 
-customer4 =
-  Repo.insert!(%Customer{
+{:ok, customer4} =
+  LicoriceLane.Customers.create_customer(%{
     name: "Corporate Events Direct",
     phone: "555-0321",
     email: "bookings@corpevents.com",
@@ -72,8 +72,8 @@ customer4 =
     notes: "Regular corporate client - monthly events"
   })
 
-customer5 =
-  Repo.insert!(%Customer{
+{:ok, customer5} =
+  LicoriceLane.Customers.create_customer(%{
     name: "Birthday Bash Productions",
     phone: "555-0654",
     email: "party@birthdaybash.com",
@@ -82,8 +82,8 @@ customer5 =
     notes: "Specializes in children's birthday parties"
   })
 
-customer6 =
-  Repo.insert!(%Customer{
+{:ok, customer6} =
+  LicoriceLane.Customers.create_customer(%{
     name: "Gala Affairs",
     phone: "555-0987",
     email: "info@galaaffairs.com",
