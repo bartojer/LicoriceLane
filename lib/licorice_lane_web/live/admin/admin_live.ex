@@ -6,16 +6,24 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
     InventoryComponent,
     BookingsComponent,
     ClientsComponent,
+    MessagesComponent,
     AddItemComponent,
     EditItemComponent
   }
 
+  alias LicoriceLane.Messages
+
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Messages.subscribe()
+    end
+
     socket =
       socket
       |> assign(:active_tab, "dashboard")
       |> assign(:editing_item_id, nil)
+      |> assign(:new_messages_count, Messages.count_new_messages())
 
     {:ok, socket}
   end
@@ -45,6 +53,16 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
     # Inventory updates are handled by child components (DashboardComponent, InventoryComponent)
     # Just acknowledge the message here to prevent crashes
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:message_created, _message}, socket) do
+    {:noreply, assign(socket, :new_messages_count, Messages.count_new_messages())}
+  end
+
+  @impl true
+  def handle_info({:message_updated, _message}, socket) do
+    {:noreply, assign(socket, :new_messages_count, Messages.count_new_messages())}
   end
 
   @impl true
@@ -125,6 +143,18 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
             >
               Clients
             </button>
+            <button
+              phx-click="switch_tab"
+              phx-value-tab="messages"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "messages", do: "border-brand text-brand", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
+            >
+              Messages
+              <%= if @new_messages_count > 0 do %>
+                <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  {@new_messages_count}
+                </span>
+              <% end %>
+            </button>
           </nav>
         </div>
       </div>
@@ -157,6 +187,10 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
 
         <%= if @active_tab == "clients" do %>
           <.live_component module={ClientsComponent} id="clients-component" />
+        <% end %>
+
+        <%= if @active_tab == "messages" do %>
+          <.live_component module={MessagesComponent} id="messages-component" />
         <% end %>
       </div>
     </div>

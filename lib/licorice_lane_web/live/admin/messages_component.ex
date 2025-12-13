@@ -1,0 +1,369 @@
+defmodule LicoriceLaneWeb.Admin.MessagesComponent do
+  use LicoriceLaneWeb, :live_component
+
+  alias LicoriceLane.Messages
+
+  @impl true
+  def update(assigns, socket) do
+    if connected?(socket) do
+      Messages.subscribe()
+    end
+
+    socket =
+      socket
+      |> assign(assigns)
+      |> assign(:search_term, "")
+      |> assign(:filter_status, :all)
+      |> assign(:selected_message, nil)
+      |> assign(:show_modal, false)
+      |> load_messages()
+
+    {:ok, socket}
+  end
+
+  defp load_messages(socket) do
+    messages =
+      cond do
+        socket.assigns.search_term != "" ->
+          Messages.search_messages_by_name(socket.assigns.search_term)
+
+        socket.assigns.filter_status == :all ->
+          Messages.list_messages()
+
+        true ->
+          Messages.list_messages_by_status(socket.assigns.filter_status)
+      end
+
+    stream(socket, :messages, messages, reset: true)
+  end
+
+  @impl true
+  def handle_event("search", %{"search_term" => search_term}, socket) do
+    socket =
+      socket
+      |> assign(:search_term, search_term)
+      |> load_messages()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("filter_status", %{"status" => status}, socket) do
+    filter_status =
+      case status do
+        "all" -> :all
+        "new" -> :new
+        "read" -> :read
+        "archived" -> :archived
+        _ -> :all
+      end
+
+    socket =
+      socket
+      |> assign(:filter_status, filter_status)
+      |> assign(:search_term, "")
+      |> load_messages()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("view_message", %{"message-id" => message_id}, socket) do
+    message = Messages.get_message!(message_id)
+
+    # Auto-mark as read when opened
+    if message.status == :new do
+      Messages.mark_as_read(message)
+    end
+
+    socket =
+      socket
+      |> assign(:selected_message, message)
+      |> assign(:show_modal, true)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("close_modal", _params, socket) do
+    {:noreply, assign(socket, show_modal: false, selected_message: nil)}
+  end
+
+  def handle_event("update_status", %{"status" => status}, socket) do
+    message = socket.assigns.selected_message
+
+    case status do
+      "new" -> Messages.mark_as_new(message)
+      "read" -> Messages.mark_as_read(message)
+      "archived" -> Messages.mark_as_archived(message)
+      _ -> {:ok, message}
+    end
+
+    # Refresh the message details
+    updated_message = Messages.get_message!(message.id)
+
+    {:noreply, assign(socket, selected_message: updated_message)}
+  end
+
+  def handle_event("update_admin_notes", %{"value" => notes}, socket) do
+    message = socket.assigns.selected_message
+    Messages.update_message_status(message, %{status: message.status, admin_notes: notes})
+
+    # Refresh the message details
+    updated_message = Messages.get_message!(message.id)
+
+    {:noreply, assign(socket, selected_message: updated_message)}
+  end
+
+  def handle_info({:message_created, _message}, socket) do
+    {:noreply, load_messages(socket)}
+  end
+
+  def handle_info({:message_updated, message}, socket) do
+    socket =
+      socket
+      |> stream_insert(:messages, message)
+      |> maybe_update_selected_message(message)
+
+    {:noreply, socket}
+  end
+
+  defp maybe_update_selected_message(socket, message) do
+    if socket.assigns.selected_message &&
+         socket.assigns.selected_message.id == message.id do
+      assign(socket, :selected_message, message)
+    else
+      socket
+    end
+  end
+
+  defp status_badge_class(:new), do: "bg-green-100 text-green-800"
+  defp status_badge_class(:read), do: "bg-blue-100 text-blue-800"
+  defp status_badge_class(:archived), do: "bg-gray-100 text-gray-800"
+
+  defp truncate_message(message, length \\ 50) do
+    if String.length(message) > length do
+      String.slice(message, 0, length) <> "..."
+    else
+      message
+    end
+  end
+
+  defp format_datetime(datetime) do
+    Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div>
+      <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+          <div class="flex justify-between items-center mb-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Contact Messages</h3>
+          </div>
+          
+    <!-- Filters -->
+          <div class="mb-6 flex gap-4 items-center">
+            <div class="flex gap-2">
+              <button
+                phx-click="filter_status"
+                phx-value-status="all"
+                phx-target={@myself}
+                class={"px-4 py-2 rounded-lg transition-colors #{if @filter_status == :all, do: "bg-brand text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
+              >
+                All
+              </button>
+              <button
+                phx-click="filter_status"
+                phx-value-status="new"
+                phx-target={@myself}
+                class={"px-4 py-2 rounded-lg transition-colors #{if @filter_status == :new, do: "bg-brand text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
+              >
+                New
+              </button>
+              <button
+                phx-click="filter_status"
+                phx-value-status="read"
+                phx-target={@myself}
+                class={"px-4 py-2 rounded-lg transition-colors #{if @filter_status == :read, do: "bg-brand text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
+              >
+                Read
+              </button>
+              <button
+                phx-click="filter_status"
+                phx-value-status="archived"
+                phx-target={@myself}
+                class={"px-4 py-2 rounded-lg transition-colors #{if @filter_status == :archived, do: "bg-brand text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
+              >
+                Archived
+              </button>
+            </div>
+            
+    <!-- Search -->
+            <div class="flex-1">
+              <form phx-change="search" phx-submit="search" phx-target={@myself}>
+                <input
+                  type="text"
+                  name="search_term"
+                  value={@search_term}
+                  placeholder="Search by name..."
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand"
+                />
+              </form>
+            </div>
+          </div>
+          
+    <!-- Messages Table -->
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Message Preview
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Received
+                  </th>
+                </tr>
+              </thead>
+              <tbody
+                class="bg-white divide-y divide-gray-200"
+                id="messages-list"
+                phx-update="stream"
+              >
+                <tr
+                  :for={{dom_id, message} <- @streams.messages}
+                  id={dom_id}
+                  phx-click="view_message"
+                  phx-value-message-id={message.id}
+                  phx-target={@myself}
+                  class="hover:bg-gray-50 cursor-pointer"
+                >
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class={"px-2 inline-flex text-xs leading-5 font-semibold rounded-full #{status_badge_class(message.status)}"}>
+                      {message.status |> Atom.to_string() |> String.capitalize()}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">{message.name}</div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {message.email}
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-500">
+                    <div class="max-w-md truncate">{truncate_message(message.message)}</div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {format_datetime(message.inserted_at)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+    <!-- Message Detail Modal -->
+      <.modal
+        :if={@show_modal && @selected_message}
+        id="message-detail-modal"
+        show
+        on_cancel={JS.push("close_modal", target: @myself)}
+      >
+        <div class="space-y-4">
+          <div class="flex justify-between items-start">
+            <h3 class="text-lg font-semibold text-gray-900">Message Details</h3>
+            <span class={"px-3 py-1 text-sm font-semibold rounded-full #{status_badge_class(@selected_message.status)}"}>
+              {@selected_message.status |> Atom.to_string() |> String.capitalize()}
+            </span>
+          </div>
+
+          <div class="border-t border-gray-200 pt-4 space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Name</label>
+              <p class="mt-1 text-sm text-gray-900">{@selected_message.name}</p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Email</label>
+              <p class="mt-1 text-sm text-gray-900">{@selected_message.email}</p>
+            </div>
+
+            <div :if={@selected_message.phone}>
+              <label class="block text-sm font-medium text-gray-700">Phone</label>
+              <p class="mt-1 text-sm text-gray-900">{@selected_message.phone}</p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Message</label>
+              <p class="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
+                {@selected_message.message}
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Received</label>
+              <p class="mt-1 text-sm text-gray-900">
+                {format_datetime(@selected_message.inserted_at)}
+              </p>
+            </div>
+          </div>
+          
+    <!-- Admin Notes -->
+          <div class="border-t border-gray-200 pt-4">
+            <label for="admin-notes" class="block text-sm font-medium text-gray-700 mb-2">
+              Admin Notes (Internal)
+            </label>
+            <textarea
+              id="admin-notes"
+              phx-blur="update_admin_notes"
+              phx-target={@myself}
+              rows="3"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand"
+              placeholder="Add internal notes about this message..."
+            >{@selected_message.admin_notes}</textarea>
+          </div>
+          
+    <!-- Status Actions -->
+          <div class="border-t border-gray-200 pt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Update Status</label>
+            <div class="flex gap-2">
+              <button
+                phx-click="update_status"
+                phx-value-status="new"
+                phx-target={@myself}
+                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Mark as New
+              </button>
+              <button
+                phx-click="update_status"
+                phx-value-status="read"
+                phx-target={@myself}
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Mark as Read
+              </button>
+              <button
+                phx-click="update_status"
+                phx-value-status="archived"
+                phx-target={@myself}
+                class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Archive
+              </button>
+            </div>
+          </div>
+        </div>
+      </.modal>
+    </div>
+    """
+  end
+end

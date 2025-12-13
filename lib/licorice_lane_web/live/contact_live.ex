@@ -28,8 +28,8 @@ defmodule LicoriceLaneWeb.ContactLive do
         <.input field={@form[:email]} type="email" label="Email" required />
         <.input field={@form[:phone]} type="text" label="Phone (optional)" />
         <.input field={@form[:message]} type="textarea" label="Message" required rows="6" />
-
-        <!-- Honeypot field - hidden from users, should remain empty -->
+        
+    <!-- Honeypot field - hidden from users, should remain empty -->
         <div class="hidden">
           <.input field={@form[:honeypot]} type="text" label="Leave this field blank" />
         </div>
