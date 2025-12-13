@@ -21,8 +21,9 @@ defmodule LicoriceLane.Messages.Message do
     message
     |> cast(attrs, [:name, :email, :phone, :message, :honeypot])
     |> validate_required([:name, :email, :message])
-    |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must be a valid email")
+    |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "has invalid format")
     |> validate_honeypot()
+    |> force_change(:status, :new)
     |> put_hashed_fields()
   end
 

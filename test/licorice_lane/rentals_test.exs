@@ -1,0 +1,250 @@
+defmodule LicoriceLane.RentalsTest do
+  use LicoriceLane.DataCase
+
+  alias LicoriceLane.Rentals
+  alias LicoriceLane.Rentals.Rental
+
+  import LicoriceLane.RentalsFixtures
+  import LicoriceLane.CustomersFixtures
+
+  describe "list_rentals/0" do
+    test "returns all rentals ordered by rented_at descending" do
+      # Create rentals with different rented_at times
+      old_rental = rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), -7, :day)})
+      recent_rental = rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), -1, :day)})
+      newest_rental = rental_fixture(%{rented_at: DateTime.utc_now()})
+
+      rentals = Rentals.list_rentals()
+      rental_ids = Enum.map(rentals, & &1.id)
+
+      assert length(rentals) == 3
+      # Should be in descending order (newest first)
+      assert rental_ids == [newest_rental.id, recent_rental.id, old_rental.id]
+    end
+
+    test "returns empty list when no rentals exist" do
+      assert Rentals.list_rentals() == []
+    end
+
+    test "preloads customer and rental items" do
+      rental = rental_fixture()
+
+      [fetched] = Rentals.list_rentals()
+
+      assert Ecto.assoc_loaded?(fetched.customer)
+      assert Ecto.assoc_loaded?(fetched.rental_single_items)
+      assert Ecto.assoc_loaded?(fetched.rental_bulk_items)
+    end
+  end
+
+  describe "list_recent_rentals/1" do
+    test "returns limited number of recent rentals" do
+      # Create 10 rentals
+      for i <- 1..10 do
+        rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), -i, :hour)})
+      end
+
+      # Default limit is 5
+      assert length(Rentals.list_recent_rentals()) == 5
+
+      # Custom limit
+      assert length(Rentals.list_recent_rentals(3)) == 3
+      assert length(Rentals.list_recent_rentals(8)) == 8
+    end
+  end
+
+  describe "list_rentals_by_status/1" do
+    test "returns only rentals with the specified status" do
+      active_rental = rental_fixture(%{status: :active})
+      returned_rental = rental_fixture(%{status: :returned})
+      _cancelled_rental = rental_fixture(%{status: :cancelled})
+
+      active_results = Rentals.list_rentals_by_status(:active)
+      assert length(active_results) == 1
+      assert hd(active_results).id == active_rental.id
+
+      returned_results = Rentals.list_rentals_by_status(:returned)
+      assert length(returned_results) == 1
+      assert hd(returned_results).id == returned_rental.id
+    end
+
+    test "returns empty list when no rentals have the status" do
+      rental_fixture(%{status: :active})
+
+      assert Rentals.list_rentals_by_status(:late) == []
+    end
+  end
+
+  describe "list_upcoming_rentals/0" do
+    test "returns only rentals with future rented_at dates" do
+      # Past rental
+      _past_rental = rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), -1, :day)})
+
+      # Future rentals
+      future1 = rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), 1, :day)})
+      future2 = rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), 3, :day)})
+
+      upcoming = Rentals.list_upcoming_rentals()
+      upcoming_ids = Enum.map(upcoming, & &1.id)
+
+      assert length(upcoming) == 2
+      # Should be in ascending order (soonest first)
+      assert upcoming_ids == [future1.id, future2.id]
+    end
+  end
+
+  describe "list_active_rentals/0" do
+    test "returns only rentals with active status" do
+      active1 = rental_fixture(%{status: :active})
+      active2 = rental_fixture(%{status: :active})
+      _returned = rental_fixture(%{status: :returned})
+
+      active_rentals = Rentals.list_active_rentals()
+      active_ids = Enum.map(active_rentals, & &1.id) |> Enum.sort()
+
+      assert length(active_rentals) == 2
+      assert Enum.sort([active1.id, active2.id]) == active_ids
+    end
+  end
+
+  describe "list_overdue_rentals/0" do
+    test "returns rentals past their return_by date that are not returned" do
+      now = DateTime.utc_now()
+
+      # Overdue and not returned
+      overdue =
+        rental_fixture(%{
+          return_by: DateTime.add(now, -2, :day),
+          returned_at: nil,
+          status: :active
+        })
+
+      # Overdue but returned
+      _returned =
+        rental_fixture(%{
+          return_by: DateTime.add(now, -1, :day),
+          returned_at: DateTime.add(now, -1, :hour),
+          status: :returned
+        })
+
+      # Not overdue
+      _future =
+        rental_fixture(%{
+          return_by: DateTime.add(now, 3, :day),
+          returned_at: nil,
+          status: :active
+        })
+
+      overdue_rentals = Rentals.list_overdue_rentals()
+
+      assert length(overdue_rentals) == 1
+      assert hd(overdue_rentals).id == overdue.id
+    end
+
+    test "includes late status rentals in overdue" do
+      overdue_late =
+        rental_fixture(%{
+          return_by: DateTime.add(DateTime.utc_now(), -1, :day),
+          returned_at: nil,
+          status: :late
+        })
+
+      overdue_rentals = Rentals.list_overdue_rentals()
+
+      assert length(overdue_rentals) == 1
+      assert hd(overdue_rentals).id == overdue_late.id
+    end
+  end
+
+  describe "list_upcoming_this_week/0" do
+    test "returns rentals within the next 7 days" do
+      now = DateTime.utc_now()
+
+      # Within the week
+      this_week = rental_fixture(%{rented_at: DateTime.add(now, 3, :day)})
+
+      # More than a week away
+      _next_month = rental_fixture(%{rented_at: DateTime.add(now, 10, :day)})
+
+      # In the past
+      _past = rental_fixture(%{rented_at: DateTime.add(now, -1, :day)})
+
+      upcoming = Rentals.list_upcoming_this_week()
+
+      assert length(upcoming) == 1
+      assert hd(upcoming).id == this_week.id
+    end
+  end
+
+  describe "get_rental/1" do
+    test "returns the rental with given id" do
+      rental = rental_fixture()
+
+      assert fetched = Rentals.get_rental(rental.id)
+      assert fetched.id == rental.id
+      assert Ecto.assoc_loaded?(fetched.customer)
+    end
+
+    test "returns nil when rental does not exist" do
+      assert Rentals.get_rental(999_999) == nil
+    end
+  end
+
+  describe "search_rentals/1" do
+    test "finds rentals by customer name" do
+      customer = customer_fixture(%{name: "Sunshine Events"})
+      rental = rental_fixture(%{customer: customer})
+      _other_rental = rental_fixture()
+
+      results = Rentals.search_rentals("Sunshine")
+
+      assert length(results) == 1
+      assert hd(results).id == rental.id
+    end
+
+    test "finds rentals by rental ID" do
+      rental = rental_fixture()
+      _other_rental = rental_fixture()
+
+      results = Rentals.search_rentals(to_string(rental.id))
+
+      assert length(results) == 1
+      assert hd(results).id == rental.id
+    end
+
+    test "search is case-insensitive" do
+      customer = customer_fixture(%{name: "Happy Party Planners"})
+      rental = rental_fixture(%{customer: customer})
+
+      results = Rentals.search_rentals("happy")
+
+      assert length(results) == 1
+      assert hd(results).id == rental.id
+    end
+
+    test "returns empty list when no matches found" do
+      rental_fixture()
+
+      assert Rentals.search_rentals("nonexistent") == []
+    end
+  end
+
+  describe "rental with items" do
+    test "rental can have single items" do
+      rental = rental_with_single_items_fixture()
+
+      fetched = Rentals.get_rental(rental.id)
+
+      assert length(fetched.rental_single_items) == 1
+    end
+
+    test "rental can have bulk items" do
+      rental = rental_with_bulk_items_fixture(%{quantity: 25})
+
+      fetched = Rentals.get_rental(rental.id)
+
+      assert length(fetched.rental_bulk_items) == 1
+      assert hd(fetched.rental_bulk_items).quantity == 25
+    end
+  end
+end

@@ -21,7 +21,9 @@ defmodule LicoriceLane.Customers.Customer do
   def changeset(customer, attrs) do
     customer
     |> cast(attrs, [:name, :phone, :email, :contact_person, :billing_address, :notes])
-    |> validate_required([:name, :phone, :email, :contact_person, :billing_address, :notes])
+    |> validate_required([:name])
+    |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "has invalid format")
+    |> validate_format(:phone, ~r/^\d{3}-\d{4}$/, message: "has invalid format")
     |> put_hashed_fields()
   end
 

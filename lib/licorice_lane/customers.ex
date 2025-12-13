@@ -75,10 +75,8 @@ defmodule LicoriceLane.Customers do
   Returns a list to maintain consistency with search functions.
   """
   def find_customer_by_email(email) when is_binary(email) do
-    {:ok, email_hash} = Cloak.Ecto.SHA256.dump(email)
-
     Customer
-    |> where([c], c.email_hash == ^email_hash)
+    |> where([c], c.email_hash == ^email)
     |> Repo.all()
   end
 
@@ -87,10 +85,8 @@ defmodule LicoriceLane.Customers do
   Returns a list to maintain consistency with search functions.
   """
   def find_customer_by_phone(phone) when is_binary(phone) do
-    {:ok, phone_hash} = Cloak.Ecto.SHA256.dump(phone)
-
     Customer
-    |> where([c], c.phone_hash == ^phone_hash)
+    |> where([c], c.phone_hash == ^phone)
     |> Repo.all()
   end
 

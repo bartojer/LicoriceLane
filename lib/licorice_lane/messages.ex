@@ -105,6 +105,13 @@ defmodule LicoriceLane.Messages do
   end
 
   @doc """
+  Deletes a message.
+  """
+  def delete_message(%Message{} = message) do
+    Repo.delete(message)
+  end
+
+  @doc """
   Searches messages by name using case-insensitive ILIKE pattern matching.
   """
   def search_messages_by_name(search_term) when is_binary(search_term) do

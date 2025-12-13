@@ -10,7 +10,7 @@ config :bcrypt_elixir, :log_rounds, 1
 # Run `mix help test` for more information.
 config :licorice_lane, LicoriceLane.Repo,
   username: "postgres",
-  password: "postgres",
+  password: "elixir",
   hostname: "localhost",
   database: "licorice_lane_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
