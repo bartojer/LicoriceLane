@@ -77,20 +77,10 @@ defmodule LicoriceLaneWeb.AdminHelpers do
     - :offset - offset for database query
   """
   def paginate(total_count, page, page_size \\ nil) do
-    page_size = page_size || default_page_size()
-    page = max(1, page)
-    total_pages = max(1, ceil(total_count / page_size))
-    page = min(page, total_pages)
-
-    %{
+    LicoriceLane.Pagination.bounds(total_count,
       page: page,
-      page_size: page_size,
-      total_count: total_count,
-      total_pages: total_pages,
-      has_prev: page > 1,
-      has_next: page < total_pages,
-      offset: (page - 1) * page_size
-    }
+      page_size: page_size || default_page_size()
+    )
   end
 
   @doc """

@@ -6,6 +6,7 @@ defmodule LicoriceLane.Messages do
   import Ecto.Query
   alias LicoriceLane.Repo
   alias LicoriceLane.Messages.Message
+  alias LicoriceLane.Cache
 
   @doc """
   Returns all messages ordered by most recent first.
@@ -14,6 +15,41 @@ defmodule LicoriceLane.Messages do
     Message
     |> order_by([m], desc: m.inserted_at)
     |> Repo.all()
+  end
+
+  @doc """
+  Returns paginated messages with optional status filter and search.
+  Returns {messages, total_count} for pagination display.
+
+  ## Parameters
+    - opts: Keyword list with:
+      - :status - :all, :new, :read, or :archived
+      - :search_term - String to search by name
+      - :page - 1-indexed page number
+      - :page_size - items per page
+  """
+  def list_messages_paginated(opts \\ []) do
+    status = Keyword.get(opts, :status, :all)
+    search_term = Keyword.get(opts, :search_term, "")
+
+    Message
+    |> order_by([m], desc: m.inserted_at, asc: m.id)
+    |> maybe_filter_status(status)
+    |> maybe_filter_search(search_term)
+    |> LicoriceLane.Pagination.query(opts)
+  end
+
+  defp maybe_filter_status(query, :all), do: query
+
+  defp maybe_filter_status(query, status) when status in [:new, :read, :archived] do
+    where(query, [m], m.status == ^status)
+  end
+
+  defp maybe_filter_search(query, ""), do: query
+
+  defp maybe_filter_search(query, search_term) do
+    search_pattern = "%#{search_term}%"
+    where(query, [m], ilike(m.name, ^search_pattern))
   end
 
   @doc """
@@ -58,6 +94,7 @@ defmodule LicoriceLane.Messages do
     |> Repo.insert()
     |> case do
       {:ok, message} ->
+        Cache.invalidate_messages()
         broadcast_message_created(message)
         {:ok, message}
 
@@ -75,6 +112,7 @@ defmodule LicoriceLane.Messages do
     |> Repo.update()
     |> case do
       {:ok, message} ->
+        Cache.invalidate_messages()
         broadcast_message_updated(message)
         {:ok, message}
 
@@ -108,7 +146,16 @@ defmodule LicoriceLane.Messages do
   Deletes a message.
   """
   def delete_message(%Message{} = message) do
-    Repo.delete(message)
+    result = Repo.delete(message)
+
+    case result do
+      {:ok, deleted} ->
+        Cache.invalidate_messages()
+        {:ok, deleted}
+
+      error ->
+        error
+    end
   end
 
   @doc """

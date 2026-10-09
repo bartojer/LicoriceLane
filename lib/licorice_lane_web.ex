@@ -90,6 +90,9 @@ defmodule LicoriceLaneWeb do
       # Core UI components
       import LicoriceLaneWeb.CoreComponents
 
+      # Pagination component
+      import LicoriceLaneWeb.Components.Pagination
+
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS
 

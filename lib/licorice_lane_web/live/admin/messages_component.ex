@@ -2,6 +2,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
   use LicoriceLaneWeb, :live_component
 
   alias LicoriceLane.Messages
+  import LicoriceLaneWeb.AdminHelpers
 
   @impl true
   def update(assigns, socket) do
@@ -12,29 +13,34 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
     socket =
       socket
       |> assign(assigns)
-      |> assign(:search_term, "")
-      |> assign(:filter_status, :all)
-      |> assign(:selected_message, nil)
-      |> assign(:show_modal, false)
+      |> assign_new(:search_term, fn -> "" end)
+      |> assign_new(:filter_status, fn -> :all end)
+      |> assign_new(:selected_message, fn -> nil end)
+      |> assign_new(:show_modal, fn -> false end)
+      |> assign_new(:page, fn -> 1 end)
       |> load_messages()
 
     {:ok, socket}
   end
 
   defp load_messages(socket) do
-    messages =
-      cond do
-        socket.assigns.search_term != "" ->
-          Messages.search_messages_by_name(socket.assigns.search_term)
+    page = socket.assigns.page
+    page_size = default_page_size()
 
-        socket.assigns.filter_status == :all ->
-          Messages.list_messages()
+    {messages, total_count} =
+      Messages.list_messages_paginated(
+        status: socket.assigns.filter_status,
+        search_term: socket.assigns.search_term,
+        page: page,
+        page_size: page_size
+      )
 
-        true ->
-          Messages.list_messages_by_status(socket.assigns.filter_status)
-      end
+    pagination = paginate(total_count, page, page_size)
 
-    stream(socket, :messages, messages, reset: true)
+    socket
+    |> assign(:page, pagination.page)
+    |> assign(:pagination, pagination)
+    |> stream(:messages, messages, reset: true)
   end
 
   @impl true
@@ -42,6 +48,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
     socket =
       socket
       |> assign(:search_term, search_term)
+      |> assign(:page, 1)
       |> load_messages()
 
     {:noreply, socket}
@@ -61,6 +68,18 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
       socket
       |> assign(:filter_status, filter_status)
       |> assign(:search_term, "")
+      |> assign(:page, 1)
+      |> load_messages()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("page", %{"page" => page}, socket) do
+    page = LicoriceLane.Pagination.page_number(page)
+
+    socket =
+      socket
+      |> assign(:page, page)
       |> load_messages()
 
     {:noreply, socket}
@@ -138,18 +157,6 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
   defp status_badge_class(:read), do: "bg-blue-100 text-blue-800"
   defp status_badge_class(:archived), do: "bg-gray-100 text-gray-800"
 
-  defp truncate_message(message, length \\ 50) do
-    if String.length(message) > length do
-      String.slice(message, 0, length) <> "..."
-    else
-      message
-    end
-  end
-
-  defp format_datetime(datetime) do
-    Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
-  end
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -159,8 +166,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
           <div class="flex justify-between items-center mb-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900">Contact Messages</h3>
           </div>
-          
-    <!-- Filters -->
+          <!-- Filters -->
           <div class="mb-6 flex gap-4 items-center">
             <div class="flex gap-2">
               <button
@@ -196,8 +202,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
                 Archived
               </button>
             </div>
-            
-    <!-- Search -->
+            <!-- Search -->
             <div class="flex-1">
               <form phx-change="search" phx-submit="search" phx-target={@myself}>
                 <input
@@ -210,8 +215,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
               </form>
             </div>
           </div>
-          
-    <!-- Messages Table -->
+          <!-- Messages Table -->
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
               <thead class="bg-gray-50">
@@ -219,20 +223,25 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
+
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Name
                   </th>
+
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Email
                   </th>
+
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Message Preview
                   </th>
+
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Received
                   </th>
                 </tr>
               </thead>
+
               <tbody
                 class="bg-white divide-y divide-gray-200"
                 id="messages-list"
@@ -251,15 +260,17 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
                       {message.status |> Atom.to_string() |> String.capitalize()}
                     </span>
                   </td>
+
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm font-medium text-gray-900">{message.name}</div>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {message.email}
-                  </td>
+
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{message.email}</td>
+
                   <td class="px-6 py-4 text-sm text-gray-500">
-                    <div class="max-w-md truncate">{truncate_message(message.message)}</div>
+                    <div class="max-w-md truncate">{truncate(message.message)}</div>
                   </td>
+
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {format_datetime(message.inserted_at)}
                   </td>
@@ -267,10 +278,10 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
               </tbody>
             </table>
           </div>
+           <.pagination pagination={@pagination} target={@myself} />
         </div>
       </div>
-      
-    <!-- Message Detail Modal -->
+      <!-- Message Detail Modal -->
       <.modal
         :if={@show_modal && @selected_message}
         id="message-detail-modal"
@@ -280,6 +291,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
         <div class="space-y-4">
           <div class="flex justify-between items-start">
             <h3 class="text-lg font-semibold text-gray-900">Message Details</h3>
+
             <span class={"px-3 py-1 text-sm font-semibold rounded-full #{status_badge_class(@selected_message.status)}"}>
               {@selected_message.status |> Atom.to_string() |> String.capitalize()}
             </span>
@@ -315,13 +327,11 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
               </p>
             </div>
           </div>
-          
-    <!-- Admin Notes -->
+          <!-- Admin Notes -->
           <div class="border-t border-gray-200 pt-4">
             <label for="admin-notes" class="block text-sm font-medium text-gray-700 mb-2">
               Admin Notes (Internal)
-            </label>
-            <textarea
+            </label> <textarea
               id="admin-notes"
               phx-blur="update_admin_notes"
               phx-target={@myself}
@@ -330,8 +340,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
               placeholder="Add internal notes about this message..."
             >{@selected_message.admin_notes}</textarea>
           </div>
-          
-    <!-- Status Actions -->
+          <!-- Status Actions -->
           <div class="border-t border-gray-200 pt-4">
             <label class="block text-sm font-medium text-gray-700 mb-2">Update Status</label>
             <div class="flex gap-2">

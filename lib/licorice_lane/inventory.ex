@@ -151,6 +151,28 @@ defmodule LicoriceLane.Inventory do
     |> Repo.all()
   end
 
+  @doc """
+  Returns paginated items filtered by categories and search term.
+  Returns {items, total_count} for pagination display.
+
+  ## Parameters
+    - categories: Can be "all", :all, "lighting", a single category, or list of categories
+    - search_term: String to search in name and description
+    - opts: Keyword list with :page (1-indexed) and :page_size
+
+  ## Examples
+      list_filtered_items_paginated("all", "", page: 1, page_size: 25)
+  """
+  def list_filtered_items_paginated(categories, search_term \\ "", opts \\ []) do
+    normalized_categories = normalize_category_filter(categories)
+
+    build_items_query()
+    |> filter_by_categories(normalized_categories)
+    |> filter_by_search_term(search_term)
+    |> order_by([i], asc: i.name, asc: i.id)
+    |> LicoriceLane.Pagination.query(opts)
+  end
+
   def list_all_inventory do
     Item
     |> preload([:single_item, :rental, :rental_bulk_items, :rental_single_items])
@@ -330,12 +352,12 @@ defmodule LicoriceLane.Inventory do
   def get_item_with_full_preloads(item_id) do
     Item
     |> Repo.get!(item_id)
-    |> Repo.preload([
+    |> Repo.preload(
       single_item: :location,
       items_locations: :location,
       rental_bulk_items: :rental,
       rental_single_items: [single_item: :item]
-    ])
+    )
   end
 
   # Private helper functions
@@ -417,7 +439,7 @@ defmodule LicoriceLane.Inventory do
   # Normalizes attribute types and sets defaults based on item type
   defp normalize_attributes(attrs) do
     item_type = normalize_item_type(get_attr(attrs, :item_type))
-    
+
     normalized =
       attrs
       |> Map.new(fn {k, v} -> {to_atom_key(k), v} end)
@@ -430,6 +452,7 @@ defmodule LicoriceLane.Inventory do
   end
 
   defp to_atom_key(key) when is_atom(key), do: key
+
   defp to_atom_key(key) when is_binary(key) do
     try do
       String.to_existing_atom(key)
@@ -449,10 +472,12 @@ defmodule LicoriceLane.Inventory do
 
   defp normalize_bulk_item_attrs_with_defaults(attrs) do
     quantity = get_attr(attrs, :quantity)
-    
+
     normalized_qty =
       case quantity do
-        q when is_integer(q) -> q
+        q when is_integer(q) ->
+          q
+
         q when is_binary(q) ->
           {parsed, ""} = Integer.parse(q)
           parsed

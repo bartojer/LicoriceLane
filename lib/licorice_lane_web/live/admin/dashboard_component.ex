@@ -2,6 +2,7 @@ defmodule LicoriceLaneWeb.Admin.DashboardComponent do
   use LicoriceLaneWeb, :live_component
 
   alias LicoriceLane.{Inventory, Rentals}
+  import LicoriceLaneWeb.AdminHelpers
 
   @impl true
   def update(assigns, socket) do
@@ -112,7 +113,7 @@ defmodule LicoriceLaneWeb.Admin.DashboardComponent do
           </div>
         </div>
       </div>
-      
+
     <!-- Recent Activity Section -->
       <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <!-- Recent Bookings -->
@@ -153,7 +154,7 @@ defmodule LicoriceLaneWeb.Admin.DashboardComponent do
             </div>
           </div>
         </div>
-        
+
     <!-- Low Stock Items -->
         <div class="bg-white shadow rounded-lg">
           <div class="px-4 py-5 sm:p-6">
@@ -200,19 +201,4 @@ defmodule LicoriceLaneWeb.Admin.DashboardComponent do
     send(self(), {:switch_tab, tab})
     {:noreply, socket}
   end
-
-  defp event_type_label(nil), do: ""
-  defp event_type_label(:wedding), do: "Wedding"
-  defp event_type_label(:corporate), do: "Corporate Event"
-  defp event_type_label(:birthday), do: "Birthday Party"
-  # use :erlang.titlecase?
-  defp event_type_label(type), do: type |> to_string() |> String.capitalize()
-
-  defp category_label(:candle), do: "Candles"
-  defp category_label(:electric_light), do: "Electric Lights"
-  defp category_label(:tableware), do: "Tableware"
-  defp category_label(:linen), do: "Linens"
-  defp category_label(:tray), do: "Trays"
-  # use :erlang.titlecase?
-  defp category_label(cat), do: cat |> to_string() |> String.capitalize()
 end

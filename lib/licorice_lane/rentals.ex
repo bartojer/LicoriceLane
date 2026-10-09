@@ -19,6 +19,64 @@ defmodule LicoriceLane.Rentals do
   end
 
   @doc """
+  Returns paginated rentals with optional status filter.
+  Returns {rentals, total_count} for pagination display.
+
+  ## Parameters
+    - status_filter: "all", "upcoming", "active", "late", "returned", "cancelled"
+    - opts: Keyword list with :page (1-indexed) and :page_size
+  """
+  def list_rentals_paginated(status_filter \\ "all", opts \\ []) do
+    build_filtered_rentals_query(status_filter)
+    |> order_by([r], asc: r.id)
+    |> LicoriceLane.Pagination.query(opts)
+  end
+
+  defp build_filtered_rentals_query("all") do
+    Rental
+    |> order_by([r], desc: r.rented_at)
+    |> preload([:customer, :rental_single_items, :rental_bulk_items])
+  end
+
+  defp build_filtered_rentals_query("upcoming") do
+    now = DateTime.utc_now()
+
+    Rental
+    |> where([r], r.rented_at > ^now)
+    |> order_by([r], asc: r.rented_at)
+    |> preload([:customer, :rental_single_items, :rental_bulk_items])
+  end
+
+  defp build_filtered_rentals_query("active") do
+    Rental
+    |> where([r], r.status == :active)
+    |> order_by([r], desc: r.rented_at)
+    |> preload([:customer, :rental_single_items, :rental_bulk_items])
+  end
+
+  defp build_filtered_rentals_query("late") do
+    now = DateTime.utc_now()
+
+    Rental
+    |> where([r], r.return_by < ^now)
+    |> where([r], is_nil(r.returned_at))
+    |> where([r], r.status in [:active, :late])
+    |> order_by([r], asc: r.return_by)
+    |> preload([:customer, :rental_single_items, :rental_bulk_items])
+  end
+
+  defp build_filtered_rentals_query(status) when status in ["returned", "cancelled"] do
+    status_atom = String.to_existing_atom(status)
+
+    Rental
+    |> where([r], r.status == ^status_atom)
+    |> order_by([r], desc: r.rented_at)
+    |> preload([:customer, :rental_single_items, :rental_bulk_items])
+  end
+
+  defp build_filtered_rentals_query(_), do: build_filtered_rentals_query("all")
+
+  @doc """
   Returns the most recent N rentals.
   Default limit is 5.
   """

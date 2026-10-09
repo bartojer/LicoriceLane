@@ -6,6 +6,7 @@ defmodule LicoriceLane.Customers do
   import Ecto.Query
   alias LicoriceLane.Repo
   alias LicoriceLane.Customers.Customer
+  alias LicoriceLane.Cache
 
   @doc """
   Returns all customers ordered by name.
@@ -14,6 +15,29 @@ defmodule LicoriceLane.Customers do
     Customer
     |> order_by([c], asc: c.name)
     |> Repo.all()
+  end
+
+  @doc """
+  Returns paginated customers with optional search.
+  Returns {customers, total_count} for pagination display.
+
+  ## Parameters
+    - search_term: String to search by name (or exact email/phone match)
+    - opts: Keyword list with :page (1-indexed) and :page_size
+  """
+  def list_customers_paginated(search_term \\ "", opts \\ []) do
+    if search_term == "" do
+      Customer
+      |> order_by([c], asc: c.name, asc: c.id)
+      |> LicoriceLane.Pagination.query(opts)
+    else
+      # Preserve exact encrypted-field lookups and deduplicate before counting.
+      all_results = search_customers(search_term) |> Enum.sort_by(&{&1.name, &1.id})
+      total_count = length(all_results)
+      pagination = LicoriceLane.Pagination.bounds(total_count, opts)
+      customers = Enum.slice(all_results, pagination.offset, pagination.page_size)
+      {customers, total_count}
+    end
   end
 
   @doc """
@@ -107,24 +131,53 @@ defmodule LicoriceLane.Customers do
   Creates a customer.
   """
   def create_customer(attrs \\ %{}) do
-    %Customer{}
-    |> Customer.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %Customer{}
+      |> Customer.changeset(attrs)
+      |> Repo.insert()
+
+    case result do
+      {:ok, customer} ->
+        Cache.invalidate_customers()
+        {:ok, customer}
+
+      error ->
+        error
+    end
   end
 
   @doc """
   Updates a customer.
   """
   def update_customer(%Customer{} = customer, attrs) do
-    customer
-    |> Customer.changeset(attrs)
-    |> Repo.update()
+    result =
+      customer
+      |> Customer.changeset(attrs)
+      |> Repo.update()
+
+    case result do
+      {:ok, updated} ->
+        Cache.invalidate_customers()
+        {:ok, updated}
+
+      error ->
+        error
+    end
   end
 
   @doc """
   Deletes a customer.
   """
   def delete_customer(%Customer{} = customer) do
-    Repo.delete(customer)
+    result = Repo.delete(customer)
+
+    case result do
+      {:ok, deleted} ->
+        Cache.invalidate_customers()
+        {:ok, deleted}
+
+      error ->
+        error
+    end
   end
 end
