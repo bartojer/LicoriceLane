@@ -17,12 +17,16 @@ Validated on October 7, 2026 in Ubuntu WSL with Elixir 1.18.4, Erlang/OTP 28.0.2
 | October 9 admin inventory deletion: `mix test --seed 0` | 312 tests, 0 failures, 1 optional browser case skipped |
 | October 9 preserved upload browser regression: `mix test test/licorice_lane_web/live/inventory_upload_test.exs --only browser --seed 0` with browser runtime configured | 1 selected browser case passed, 13 excluded |
 | October 9 admin deletion with Playwright/headless Edge: `mix test test/licorice_lane_web/live/admin_inventory_delete_test.exs --seed 0` with browser runtime configured | 10 tests, 0 failures, no skips |
+| October 9 booking event-date filter: rental context, shared pagination, and admin pagination tests, seed 0 | 40 tests, 0 failures |
+| October 9 booking event-date filter: `mix test --seed 0` | 320 tests, 0 failures, 2 optional browser cases skipped |
 
 The October 7 suite had 20 test files and 24 additional cases. The [inventory lifecycle tests](../test/licorice_lane/inventory_lifecycle_test.exs) cover writes and side effects; [admin route tests](../test/licorice_lane_web/live/admin_live_test.exs), [authorization hook/plug tests](../test/licorice_lane_web/user_auth_test.exs), and the registration regression test cover admin access. Existing query assertions were strengthened and unused test bindings cleaned up.
 
 October 9 upload repairs add 13 server/component regressions, one optional real-browser regression, and three atomic-edit context tests. The browser check uses installed headless Edge and Playwright against a loopback test server and verifies decoded preview, actual transfer, rejected-save retention, successful retry, database persistence, and HTTP serving. Set the README's browser runtime variables to include it; otherwise that one case is skipped.
 
 Admin inventory deletion adds five context regressions, nine LiveView regressions, and one optional [Playwright browser regression](../test/browser/inventory_delete.cjs). They cover atomic bulk stock removal, single tracking removal, rollback for booking/movement references, stale records, confirmation/cancellation, filter/page preservation, and public listing updates. The browser case verifies Cancel, Escape, and confirmed single/bulk deletion, with database cleanup checked by ExUnit. Items used in any booking (including returned/cancelled bookings) or movement history are retained. Image files remain on disk because their paths can be shared.
+
+Booking event-date filtering adds four rental context regressions and three admin LiveView regressions. They cover UTC day boundaries, event date independently of pickup date, all existing status combinations, filtered totals and stable pagination, page reset, clearing, missing event dates, invalid inputs, and filter/page preservation during component refresh.
 
 The locked LiveView/lazy_html dependencies require Elixir 1.15 or newer. `.tool-versions` pins the validated runtime, and [README](../README.md#running-tests-from-windows-through-wsl) documents the project-local WSL tool/build setup. No seeds or database resets were used for these runs.
 
@@ -38,7 +42,7 @@ The feature table describes the current source, including the reviewed admin ref
 | Admin access | Authentication and admin checks in router and LiveView session; tab navigation | [AdminLive](../lib/licorice_lane_web/live/admin/admin_live.ex), [UserAuth](../lib/licorice_lane_web/user_auth.ex) |
 | Dashboard | Database-backed booking count, low-stock list, and recent bookings | [DashboardComponent](../lib/licorice_lane_web/live/admin/dashboard_component.ex) |
 | Inventory | Search/category filters, pagination, per-warehouse quantity queries, atomic single/bulk creation, base item editing, image uploads, confirmed deletion of unreferenced single/bulk items | [Inventory](../lib/licorice_lane/inventory.ex), admin inventory/add/edit components |
-| Bookings | Paginated listing and status filters | [BookingsComponent](../lib/licorice_lane_web/live/admin/bookings_component.ex), [Rentals](../lib/licorice_lane/rentals.ex) |
+| Bookings | Paginated listing with combined status and UTC event-date filters; changing either filter resets the page, and clearing the date restores all dates | [BookingsComponent](../lib/licorice_lane_web/live/admin/bookings_component.ex), [Rentals](../lib/licorice_lane/rentals.ex) |
 | Customers | Paginated listing and name/exact-email/exact-phone search; context CRUD | [ClientsComponent](../lib/licorice_lane_web/live/admin/clients_component.ex), [Customers](../lib/licorice_lane/customers.ex) |
 | Admin messages | Paginated name search/status filters, detail modal, status changes, internal notes, opening-new-message mark-as-read operation | [MessagesComponent](../lib/licorice_lane_web/live/admin/messages_component.ex) |
 | Write side effects | Inventory/customer/message cache invalidation; inventory and message create/update broadcasts | Contexts and [Cache](../lib/licorice_lane/cache.ex) |
@@ -49,7 +53,6 @@ Public inventory receives inventory PubSub events and has a listing refresh hand
 
 | Workflow | Current limitation | Starting point |
 | --- | --- | --- |
-| Booking date filter | Handler assigns the selected date but does not filter query results | [BookingsComponent](../lib/licorice_lane_web/live/admin/bookings_component.ex) |
 | Booking details and updates | `view_rental` and `update_rental` handlers are TODO/no-ops | [BookingsComponent](../lib/licorice_lane_web/live/admin/bookings_component.ex) |
 | Rental lifecycle writes | Rentals context has read queries only; creating/updating/returning rentals needs a context API and inventory effects | [Rentals](../lib/licorice_lane/rentals.ex) |
 | Customer details and editing | `view_customer` and `edit_customer` handlers are TODO/no-ops | [ClientsComponent](../lib/licorice_lane_web/live/admin/clients_component.ex) |

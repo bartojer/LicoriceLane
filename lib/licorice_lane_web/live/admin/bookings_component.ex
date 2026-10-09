@@ -24,6 +24,7 @@ defmodule LicoriceLaneWeb.Admin.BookingsComponent do
     {rentals, total_count} =
       Rentals.list_rentals_paginated(
         socket.assigns.status_filter,
+        date_filter: socket.assigns.date_filter,
         page: page,
         page_size: page_size
       )
@@ -47,10 +48,23 @@ defmodule LicoriceLaneWeb.Admin.BookingsComponent do
     {:noreply, socket}
   end
 
-  def handle_event("filter_date", %{"date" => date}, socket) do
-    # TODO: Implement date filtering
-    {:noreply, assign(socket, :date_filter, date)}
+  def handle_event("filter_date", %{"date" => date}, socket) when is_binary(date) do
+    date_filter =
+      case Date.from_iso8601(date) do
+        {:ok, date} -> date
+        {:error, _} -> nil
+      end
+
+    socket =
+      socket
+      |> assign(:date_filter, date_filter)
+      |> assign(:page, 1)
+      |> load_bookings()
+
+    {:noreply, socket}
   end
+
+  def handle_event("filter_date", _params, socket), do: {:noreply, socket}
 
   def handle_event("page", %{"page" => page}, socket) do
     page = LicoriceLane.Pagination.page_number(page)
@@ -101,9 +115,13 @@ defmodule LicoriceLaneWeb.Admin.BookingsComponent do
             </select>
           </form>
           <form phx-change="filter_date" phx-target={@myself}>
+            <label for="booking-event-date" class="sr-only">Event date</label>
             <input
+              id="booking-event-date"
               type="date"
               name="date"
+              aria-label="Event date"
+              value={@date_filter}
               phx-target={@myself}
               class="px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand"
             />

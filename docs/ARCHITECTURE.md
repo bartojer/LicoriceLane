@@ -54,7 +54,9 @@ Customer search pagination currently builds the combined search result list and 
 
 Bookings and rentals refer to the same `Rental` entity. `RentalSingleItem` connects a rental to a `SingleItem`; `RentalBulkItem` connects a rental to an `Item` with a quantity.
 
-`Rentals` currently provides read queries, preloads, status filtering, and search. It has no create/update/delete context API. Seeds and rental fixtures insert records through Repo directly.
+`Rentals` currently provides read queries, preloads, status/event-date filtering, and search. It has no create/update/delete context API. Seeds and rental fixtures insert records through Repo directly.
+
+`list_rentals_paginated/2` accepts `:date_filter` in its options as a `Date` or ISO 8601 date string. It combines the status query with an `event_date` range from midnight UTC inclusive to the next midnight exclusive before counting and paginating. Selected dates exclude rentals with missing event dates; blank, missing, or invalid dates leave the status query unchanged. This filter uses event date, independently of pickup date (`rented_at`).
 
 - Stored statuses: `:active`, `:returned`, `:late`, `:cancelled`.
 - Upcoming queries use future `rented_at`, not `event_date`, and do not add a status restriction.
@@ -70,7 +72,7 @@ These describe current query behavior. Revisit the business rules deliberately w
 
 Admin routes use both authentication/admin plugs and LiveView `on_mount` hooks. `Accounts.User.admin` defaults to false and is not cast by registration. [README](../README.md#local-admin-access) explains local account bootstrap.
 
-[AdminHelpers](../lib/licorice_lane_web/helpers/admin_helpers.ex) holds labels, price/date formatting, truncation, pagination metadata, and the default page size of 25. [Pagination](../lib/licorice_lane_web/components/pagination.ex) renders pagination controls. Context pagination functions return `{records, total_count}` and use [Pagination](../lib/licorice_lane/pagination.ex) to clamp page bounds before fetching rows. Queries include a unique ID tie breaker so equal names/timestamps have stable page boundaries. Components use the same bounds for metadata, preserve filters/page on updates, and reset streams after changing filters or pages. Booking status/date controls are inside forms so LiveView can send change events; date filtering remains a placeholder. Public inventory has its own presentation helpers in [inventory_components.ex](../lib/licorice_lane_web/components/inventory_components.ex).
+[AdminHelpers](../lib/licorice_lane_web/helpers/admin_helpers.ex) holds labels, price/date formatting, truncation, pagination metadata, and the default page size of 25. [Pagination](../lib/licorice_lane_web/components/pagination.ex) renders pagination controls. Context pagination functions return `{records, total_count}` and use [Pagination](../lib/licorice_lane/pagination.ex) to clamp page bounds before fetching rows. Queries include a unique ID tie breaker so equal names/timestamps have stable page boundaries. Components use the same bounds for metadata, preserve filters/page on updates, and reset streams after changing filters or pages. Booking status/date controls are inside forms so LiveView can send change events. Both filters reset the page; the selected event date is bound to the input and retained during pagination/component refresh. Clearing the date restores all dates while retaining status. Invalid date strings clear the date filter; malformed date event payloads are ignored. Public inventory has its own presentation helpers in [inventory_components.ex](../lib/licorice_lane_web/components/inventory_components.ex).
 
 ## Cache and realtime contracts
 

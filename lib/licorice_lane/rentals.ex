@@ -19,18 +19,40 @@ defmodule LicoriceLane.Rentals do
   end
 
   @doc """
-  Returns paginated rentals with optional status filter.
+  Returns paginated rentals with optional status and event date filters.
   Returns {rentals, total_count} for pagination display.
 
   ## Parameters
     - status_filter: "all", "upcoming", "active", "late", "returned", "cancelled"
-    - opts: Keyword list with :page (1-indexed) and :page_size
+    - opts: Keyword list with :page (1-indexed), :page_size, and :date_filter
+
+  The :date_filter option accepts a Date or ISO 8601 date string and matches
+  event_date from midnight UTC (inclusive) to the next midnight (exclusive).
+  Rentals without an event date are excluded when a date is selected.
+  Blank, missing, or invalid date filters leave the status-filtered query unchanged.
   """
   def list_rentals_paginated(status_filter \\ "all", opts \\ []) do
     build_filtered_rentals_query(status_filter)
+    |> filter_event_date(Keyword.get(opts, :date_filter))
     |> order_by([r], asc: r.id)
     |> LicoriceLane.Pagination.query(opts)
   end
+
+  defp filter_event_date(query, %Date{} = date) do
+    start_at = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+    end_at = DateTime.add(start_at, 1, :day)
+
+    where(query, [r], r.event_date >= ^start_at and r.event_date < ^end_at)
+  end
+
+  defp filter_event_date(query, date) when is_binary(date) do
+    case Date.from_iso8601(date) do
+      {:ok, date} -> filter_event_date(query, date)
+      {:error, _} -> query
+    end
+  end
+
+  defp filter_event_date(query, _date), do: query
 
   defp build_filtered_rentals_query("all") do
     Rental
