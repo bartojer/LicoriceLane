@@ -556,6 +556,13 @@ defmodule LicoriceLane.Inventory do
   end
 
   @doc """
+  Gets an item by ID with standard list preloads, or returns nil if it is missing.
+  """
+  def get_item(id) do
+    build_items_query() |> Repo.get(id)
+  end
+
+  @doc """
   Gets a single item by ID with full preloads.
   Raises if not found.
   """
@@ -638,19 +645,52 @@ defmodule LicoriceLane.Inventory do
   end
 
   @doc """
-  Deletes an item and broadcasts the update.
+  Deletes an item and its stock rows atomically, then invalidates inventory cache
+  entries and broadcasts the update. Single-item tracking is removed by the
+  database's cascading foreign key; warehouse/customer locations are preserved.
+
+  Items referenced by any booking or location history cannot be deleted, including
+  returned/cancelled bookings. Returns `{:error, changeset}` for those references
+  or an already-deleted item, without removing stock or emitting update side effects.
+  Image files are retained because their paths can be shared by other items.
   """
   def delete_item(%Item{} = item) do
-    result = Repo.delete(item)
+    changeset =
+      item
+      |> Ecto.Changeset.change()
+      |> Ecto.Changeset.foreign_key_constraint(:id,
+        name: :rental_bulk_items_item_id_fkey,
+        message: "is used in a booking"
+      )
+      |> Ecto.Changeset.foreign_key_constraint(:id,
+        name: :rental_single_items_single_item_id_fkey,
+        message: "is used in a booking"
+      )
+      |> Ecto.Changeset.foreign_key_constraint(:id,
+        name: :location_history_item_id_fkey,
+        message: "has movement history"
+      )
+
+    result =
+      Ecto.Multi.new()
+      |> Ecto.Multi.delete_all(
+        :stock,
+        from(il in LicoriceLane.Locations.ItemsLocation, where: il.item_id == ^item.id)
+      )
+      |> Ecto.Multi.delete(:item, changeset,
+        stale_error_field: :id,
+        stale_error_message: "has already been deleted"
+      )
+      |> Repo.transaction()
 
     case result do
-      {:ok, deleted_item} ->
+      {:ok, %{item: deleted_item}} ->
         Cache.invalidate_inventory()
         broadcast_inventory_update(deleted_item.id)
         {:ok, deleted_item}
 
-      error ->
-        error
+      {:error, :item, changeset, _changes} ->
+        {:error, changeset}
     end
   end
 end

@@ -40,6 +40,8 @@ Warehouse stock queries aggregate `ItemsLocation` rows at warehouse locations. L
 
 `update_item/2` updates base item fields. Admin edits use `update_item_with_details/2` to update base fields and single-item condition/status in one transaction, including an image path change. Both APIs invalidate inventory data and broadcast after success. Neither provides a general operation for moving a single item or editing bulk quantity/location rows. New movement or rental write paths should handle all affected records in the context and invalidate any affected inventory/rental data.
 
+`delete_item/1` removes stock rows and the base item in one transaction; the database cascades deletion to single-item tracking. Locations and shared image files remain. Foreign key constraints reject items used in any booking or location history, including returned/cancelled bookings, and roll back stock removal. Reference violations and stale deletes return `{:error, changeset}`; cache invalidation and broadcasts occur only after success. Admin inventory uses a server-held selection and a confirmation modal, shows the result in the component, and reloads the current filtered page with bounds clamping. Cancellation performs no write.
+
 ## Customers, encryption, and search
 
 [Customer](../lib/licorice_lane/customers/customer.ex) encrypts phone, email, contact person, billing address, and notes with `LicoriceLane.Encrypted.Binary`; the Vault uses AES-GCM. Name remains plaintext. Changesets populate email/phone hash fields using `Cloak.Ecto.SHA256`. Context queries support name substring search plus exact email/phone matches and deduplicate combined results.
@@ -107,7 +109,7 @@ Admin add/edit components keep their file inputs mounted during previews and ini
 | Accounts and authorization | [accounts_test.exs](../test/licorice_lane/accounts_test.exs), [user_auth_test.exs](../test/licorice_lane_web/user_auth_test.exs), [admin_live_test.exs](../test/licorice_lane_web/live/admin_live_test.exs), user LiveView/session controller tests | `AccountsFixtures` (including `admin_user_fixture/1`) |
 | Inventory | [inventory_test.exs](../test/licorice_lane/inventory_test.exs), [inventory_lifecycle_test.exs](../test/licorice_lane/inventory_lifecycle_test.exs) | `ItemsFixtures`, `LocationsFixtures` |
 | Pagination and cache writes | [pagination_test.exs](../test/licorice_lane/pagination_test.exs), [write_cache_test.exs](../test/licorice_lane/write_cache_test.exs) | Existing domain fixtures |
-| Admin pagination and public inventory | [admin_pagination_test.exs](../test/licorice_lane_web/live/admin_pagination_test.exs), [inventory_live_test.exs](../test/licorice_lane_web/live/inventory_live_test.exs) | Existing account/domain fixtures |
+| Admin pagination, inventory deletion and public inventory | [admin_pagination_test.exs](../test/licorice_lane_web/live/admin_pagination_test.exs), [admin_inventory_delete_test.exs](../test/licorice_lane_web/live/admin_inventory_delete_test.exs), [inventory_live_test.exs](../test/licorice_lane_web/live/inventory_live_test.exs) | Existing account/domain fixtures |
 | Customers | [customers_test.exs](../test/licorice_lane/customers_test.exs) | `CustomersFixtures` |
 | Rentals | [rentals_test.exs](../test/licorice_lane/rentals_test.exs) | `RentalsFixtures` |
 | Messages and contact form | [messages_test.exs](../test/licorice_lane/messages_test.exs), [contact_live_test.exs](../test/licorice_lane_web/live/contact_live_test.exs) | `MessagesFixtures` |

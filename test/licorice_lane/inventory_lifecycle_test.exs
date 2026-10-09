@@ -7,6 +7,7 @@ defmodule LicoriceLane.InventoryLifecycleTest do
 
   import LicoriceLane.ItemsFixtures
   import LicoriceLane.LocationsFixtures
+  import LicoriceLane.RentalsFixtures
 
   @inventory_cache_keys [:inventory_items, :low_stock_items, :dashboard_stats]
 
@@ -205,6 +206,109 @@ defmodule LicoriceLane.InventoryLifecycleTest do
       assert Repo.get(Item, item.id) == nil
       assert Repo.get(SingleItem, item.id) == nil
       assert_inventory_updated(item.id)
+    end
+
+    test "deletes bulk stock at every location and preserves locations and other items", %{
+      warehouse: warehouse
+    } do
+      item = bulk_item_fixture(%{location: warehouse})
+      other_item = bulk_item_fixture(%{location: warehouse})
+      customer_location = customer_location_fixture()
+
+      Repo.insert!(%ItemsLocation{
+        item_id: item.id,
+        location_id: customer_location.id,
+        quantity: 5
+      })
+
+      assert {:ok, deleted} = Inventory.delete_item(item)
+      assert deleted.id == item.id
+      assert Repo.get(Item, item.id) == nil
+      assert Repo.all(from(il in ItemsLocation, where: il.item_id == ^item.id)) == []
+      assert Repo.get!(Item, other_item.id)
+      assert [%{quantity: 50}] = Inventory.get_warehouse_quantities(other_item.id)
+      assert Repo.get!(LicoriceLane.Locations.Location, warehouse.id)
+      assert Repo.get!(LicoriceLane.Locations.Location, customer_location.id)
+      assert_inventory_updated(item.id)
+    end
+
+    test "rejects single items in bookings regardless of status and preserves tracking", %{
+      warehouse: warehouse
+    } do
+      for status <- [:active, :late, :returned, :cancelled] do
+        item = single_item_fixture(%{location: warehouse})
+        rental = rental_with_single_items_fixture(%{single_item: item, status: status})
+        # Customer fixtures invalidate dashboard data; measure only deletion side effects.
+        for key <- @inventory_cache_keys, do: Cache.put(key, :stale)
+
+        assert {:error, changeset} = Inventory.delete_item(item)
+        assert "is used in a booking" in errors_on(changeset).id
+        assert Repo.get!(Item, item.id)
+        assert Repo.get!(SingleItem, item.id)
+
+        assert Repo.get!(LicoriceLane.Rentals.RentalSingleItem, hd(rental.rental_single_items).id)
+        assert_inventory_unchanged()
+      end
+    end
+
+    test "rejects bulk items in bookings and rolls back stock deletion", %{warehouse: warehouse} do
+      for status <- [:active, :late, :returned, :cancelled] do
+        item = bulk_item_fixture(%{location: warehouse})
+        rental = rental_with_bulk_items_fixture(%{bulk_item: item, status: status})
+        for key <- @inventory_cache_keys, do: Cache.put(key, :stale)
+
+        assert {:error, changeset} = Inventory.delete_item(item)
+        assert "is used in a booking" in errors_on(changeset).id
+        assert Repo.get!(Item, item.id)
+        assert [%{quantity: 50}] = Inventory.get_warehouse_quantities(item.id)
+        assert Repo.get!(LicoriceLane.Rentals.RentalBulkItem, hd(rental.rental_bulk_items).id)
+        assert_inventory_unchanged()
+      end
+    end
+
+    test "preserves location history and rolls back single tracking or bulk stock deletion", %{
+      warehouse: warehouse
+    } do
+      items = [
+        single_item_fixture(%{location: warehouse}),
+        bulk_item_fixture(%{location: warehouse})
+      ]
+
+      for item <- items do
+        history =
+          Repo.insert!(%LicoriceLane.Locations.LocationHistory{
+            item_id: item.id,
+            quantity: 1,
+            ts: DateTime.utc_now() |> DateTime.truncate(:second),
+            to_location_id: warehouse.id
+          })
+
+        assert {:error, changeset} = Inventory.delete_item(item)
+        assert "has movement history" in errors_on(changeset).id
+        assert Repo.get!(Item, item.id)
+        assert Repo.get!(LicoriceLane.Locations.LocationHistory, history.id)
+
+        if item.item_type == :single do
+          assert Repo.get!(SingleItem, item.id)
+        else
+          assert [%{quantity: 50}] = Inventory.get_warehouse_quantities(item.id)
+        end
+
+        assert_inventory_unchanged()
+      end
+    end
+
+    test "returns an error for an already deleted item without repeating side effects", %{
+      warehouse: warehouse
+    } do
+      item = bulk_item_fixture(%{location: warehouse})
+      assert {:ok, _} = Inventory.delete_item(item)
+      assert_inventory_updated(item.id)
+      for key <- @inventory_cache_keys, do: Cache.put(key, :stale)
+
+      assert {:error, changeset} = Inventory.delete_item(item)
+      assert "has already been deleted" in errors_on(changeset).id
+      assert_inventory_unchanged()
     end
   end
 

@@ -20,6 +20,8 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
       |> assign_new(:search_term, fn -> "" end)
       |> assign_new(:selected_category, fn -> "all" end)
       |> assign_new(:page, fn -> 1 end)
+      |> assign_new(:pending_delete, fn -> nil end)
+      |> assign_new(:delete_notice, fn -> nil end)
       |> load_inventory()
 
     {:ok, socket}
@@ -93,15 +95,61 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
     {:noreply, socket}
   end
 
-  def handle_event("delete_item", %{"item-id" => _item_id}, socket) do
-    # TODO: Implement delete functionality with confirmation
+  def handle_event("delete_item", params, socket) do
+    item = find_delete_item(params["item-id"])
+
+    socket =
+      socket
+      |> assign(:pending_delete, item)
+      |> assign(:delete_notice, if(item, do: nil, else: {:error, "Item is no longer available."}))
+      |> load_inventory()
+
     {:noreply, socket}
+  end
+
+  def handle_event("cancel_delete", _params, socket) do
+    {:noreply, assign(socket, :pending_delete, nil)}
+  end
+
+  def handle_event("confirm_delete", _params, %{assigns: %{pending_delete: nil}} = socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("confirm_delete", _params, socket) do
+    notice =
+      case Inventory.delete_item(socket.assigns.pending_delete) do
+        {:ok, _item} ->
+          {:info, "Item deleted successfully."}
+
+        {:error, changeset} ->
+          if Enum.any?(changeset.errors, fn {_field, {_message, opts}} -> opts[:stale] end) do
+            {:error, "Item is no longer available."}
+          else
+            {:error,
+             "Could not delete item. Items used in bookings or movement history must be kept."}
+          end
+      end
+
+    {:noreply,
+     socket
+     |> assign(:pending_delete, nil)
+     |> assign(:delete_notice, notice)
+     |> load_inventory()}
   end
 
   def handle_event("switch_to_add_item", _params, socket) do
     send(self(), {:switch_tab, "add_item"})
     {:noreply, socket}
   end
+
+  defp find_delete_item(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {id, ""} when id > 0 and id <= 9_223_372_036_854_775_807 -> Inventory.get_item(id)
+      _ -> nil
+    end
+  end
+
+  defp find_delete_item(_id), do: nil
 
   @impl true
   def render(assigns) do
@@ -119,6 +167,20 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
             Add New Item
           </button>
         </div>
+        <p
+          :if={@delete_notice}
+          id="inventory-delete-notice"
+          role={if elem(@delete_notice, 0) == :error, do: "alert", else: "status"}
+          class={[
+            "mb-4 rounded-md p-3 text-sm",
+            if(elem(@delete_notice, 0) == :error,
+              do: "bg-red-50 text-red-700",
+              else: "bg-green-50 text-green-700"
+            )
+          ]}
+        >
+          {elem(@delete_notice, 1)}
+        </p>
         <!-- Search and Filter -->
         <div class="flex flex-col sm:flex-row gap-4 mb-6">
           <div class="flex-1">
@@ -280,8 +342,39 @@ defmodule LicoriceLaneWeb.Admin.InventoryComponent do
             </tbody>
           </table>
         </div>
-         <.pagination pagination={@pagination} target={@myself} />
+        <.pagination pagination={@pagination} target={@myself} />
       </div>
+      <.modal
+        :if={@pending_delete}
+        id="delete-item-modal"
+        show
+        on_cancel={JS.push("cancel_delete", target: @myself)}
+      >
+        <h3 id="delete-item-modal-title" class="text-lg font-semibold text-gray-900">
+          Delete {@pending_delete.name}?
+        </h3>
+        <p id="delete-item-modal-description" class="mt-3 text-sm text-gray-600">
+          This permanently deletes the inventory item and all of its stock quantities.
+          Items used in bookings or movement history cannot be deleted.
+        </p>
+        <div class="mt-6 flex justify-end gap-3">
+          <button
+            phx-click="cancel_delete"
+            phx-target={@myself}
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            phx-click="confirm_delete"
+            phx-target={@myself}
+            phx-disable-with="Deleting..."
+            class="rounded-md bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
+          >
+            Delete item
+          </button>
+        </div>
+      </.modal>
     </div>
     """
   end

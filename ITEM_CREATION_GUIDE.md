@@ -295,4 +295,6 @@ After creating items, you can:
 - Check low stock with `list_low_stock_items/0`
 - Get warehouse quantities with `get_warehouse_quantities/1`
 
-`update_item/2` changes base item fields. Admin edits use `update_item_with_details/2`, which atomically updates base fields and single-item condition/status, then invalidates cache and broadcasts on success. Neither API moves single items or edits bulk location quantities. Context deletion exists, but the admin delete action is currently a placeholder; see [status](docs/STATUS.md#unfinished-workflows).
+`update_item/2` changes base item fields. Admin edits use `update_item_with_details/2`, which atomically updates base fields and single-item condition/status, then invalidates cache and broadcasts on success. Neither API moves single items or edits bulk location quantities.
+
+Admin deletion asks for confirmation before calling `delete_item/1`. Deletion atomically removes the item and its stock/tracking rows, then invalidates cache and broadcasts. Any booking or movement-history reference prevents deletion and returns `{:error, changeset}` without changing stock. This includes returned and cancelled bookings. Locations and image files are retained; see [architecture](docs/ARCHITECTURE.md#inventory-relationships-and-writes).

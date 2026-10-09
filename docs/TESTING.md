@@ -15,7 +15,9 @@ The Playwright preference is a tooling-fit decision. No comparative speed benchm
 
 The repository currently has a targeted browser regression in [inventory_upload.cjs](../test/browser/inventory_upload.cjs), invoked by [InventoryUploadTest](../test/licorice_lane_web/live/inventory_upload_test.exs). ExUnit starts a loopback test server, creates sandboxed fixtures, runs the Playwright library script, and checks database persistence and image serving afterward.
 
-This is real browser coverage, but it is not the full Playwright Test runner. There is currently no project Playwright Test configuration, pinned npm dependency/lockfile for that runner, or configured JSON reports and failure traces. The existing browser case is optional and skips when `UPLOAD_BROWSER_NODE` is absent. Keep this regression working during any runner migration.
+[inventory_delete.cjs](../test/browser/inventory_delete.cjs), invoked by [AdminInventoryDeleteTest](../test/licorice_lane_web/live/admin_inventory_delete_test.exs), adds one focused browser case for Cancel, Escape, and confirmed single/bulk deletion. It uses the same runtime variables and sandboxed server, with database cleanup asserted afterward. When `UPLOAD_BROWSER_SCRIPT` is set for Windows Node, the deletion script is resolved beside that upload script.
+
+This is real browser coverage, but it is not the full Playwright Test runner. There is currently no project Playwright Test configuration, pinned npm dependency/lockfile for that runner, or configured JSON reports and failure traces. Both browser cases are optional and skip when `UPLOAD_BROWSER_NODE` is absent. Keep these regressions working during any runner migration.
 
 The [README](../README.md#running-tests-from-windows-through-wsl) documents the Elixir/WSL setup and, under production configuration, the current browser runtime variables. Existing commands are:
 
@@ -23,9 +25,10 @@ The [README](../README.md#running-tests-from-windows-through-wsl) documents the 
 mix test
 mix test test/licorice_lane_web/live/inventory_upload_test.exs
 mix test test/licorice_lane_web/live/inventory_upload_test.exs --only browser
+mix test test/licorice_lane_web/live/admin_inventory_delete_test.exs --only browser
 ```
 
-The last command requires the browser runtime variables described in README. Rebuild assets with `mix assets.build` before browser validation when source assets or their dependencies have changed. A skipped browser case is not proof that browser behavior passed.
+Commands with `--only browser` require the browser runtime variables described in README. Rebuild assets with `mix assets.build` before browser validation when source assets or their dependencies have changed. A skipped browser case is not proof that browser behavior passed.
 
 ## Requirements when establishing the broader E2E runner
 
