@@ -46,7 +46,8 @@ defmodule LicoriceLane.Items.Item do
         put_change(changeset, :min_stock, 0)
 
       :bulk ->
-        # Bulk items keep their min_stock value (default 10 from migration)
+        # Bulk items keep their value; the creation context supplies 10 when absent.
+        # The base schema default is 0 for callers that bypass that context.
         changeset
 
       _ ->

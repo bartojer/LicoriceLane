@@ -116,7 +116,7 @@
 - `ConnCase` and `DataCase` are already set up in `test/support`.
 - Inventory/customer/rental behavior already has fixture-backed tests; extend those tests when changing related flows.
 - `test/licorice_lane/inventory_lifecycle_test.exs` covers inventory writes, rollback, warehouse stock, and update side effects.
-- Admin authorization is covered in `user_auth_test.exs` and `live/admin_live_test.exs`; inventory uploads are covered in `live/inventory_upload_test.exs`. Other admin component workflows and public InventoryLive still need dedicated web coverage.
+- Admin authorization is covered in `user_auth_test.exs` and `live/admin_live_test.exs`; inventory uploads are covered in `live/inventory_upload_test.exs`. Admin list pagination/filtering and public InventoryLive have dedicated coverage in `live/admin_pagination_test.exs` and `live/inventory_live_test.exs`; other detailed admin workflows still need coverage.
 - Prefer formatting only changed Elixir files when the working tree contains unrelated edits.
 
 ## Agent Tips

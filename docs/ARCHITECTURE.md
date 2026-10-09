@@ -2,8 +2,6 @@
 
 Reviewed against the working tree on October 9, 2026. This is a navigation guide to current code. [STATUS.md](STATUS.md) records unfinished behavior and verification gaps.
 
-Snapshot scope: this guide also describes an earlier local admin pagination/refactor and customer/message cache changes. Those changes are being kept separate from the inventory upload and testing-policy commit. In a checkout of that commit alone, some pagination helpers/queries and cache integrations described below are not present yet; use the source in your checkout as the authority. See [STATUS.md](STATUS.md#commit-scope) for validation of the isolated commit.
-
 ## Application boundaries
 
 Business queries and write operations belong in `LicoriceLane` contexts under `lib/licorice_lane`. Routes, authentication, LiveViews, LiveComponents, and reusable UI belong under `lib/licorice_lane_web`. Schema namespaces do not always match context names: `Inventory` operates on `Items` and `Locations` schemas, and there is no separate `Items` or `Locations` context.
@@ -70,7 +68,7 @@ These describe current query behavior. Revisit the business rules deliberately w
 
 Admin routes use both authentication/admin plugs and LiveView `on_mount` hooks. `Accounts.User.admin` defaults to false and is not cast by registration. [README](../README.md#local-admin-access) explains local account bootstrap.
 
-[AdminHelpers](../lib/licorice_lane_web/helpers/admin_helpers.ex) holds labels, price/date formatting, truncation, pagination metadata, and the default page size of 25. [Pagination](../lib/licorice_lane_web/components/pagination.ex) renders pagination controls. Context pagination functions generally return `{records, total_count}`; components assign metadata and reset streams after changing filters or pages. Public inventory has its own presentation helpers in [inventory_components.ex](../lib/licorice_lane_web/components/inventory_components.ex).
+[AdminHelpers](../lib/licorice_lane_web/helpers/admin_helpers.ex) holds labels, price/date formatting, truncation, pagination metadata, and the default page size of 25. [Pagination](../lib/licorice_lane_web/components/pagination.ex) renders pagination controls. Context pagination functions return `{records, total_count}` and use [Pagination](../lib/licorice_lane/pagination.ex) to clamp page bounds before fetching rows. Queries include a unique ID tie breaker so equal names/timestamps have stable page boundaries. Components use the same bounds for metadata, preserve filters/page on updates, and reset streams after changing filters or pages. Booking status/date controls are inside forms so LiveView can send change events; date filtering remains a placeholder. Public inventory has its own presentation helpers in [inventory_components.ex](../lib/licorice_lane_web/components/inventory_components.ex).
 
 ## Cache and realtime contracts
 
@@ -108,9 +106,11 @@ Admin add/edit components keep their file inputs mounted during previews and ini
 | --- | --- | --- |
 | Accounts and authorization | [accounts_test.exs](../test/licorice_lane/accounts_test.exs), [user_auth_test.exs](../test/licorice_lane_web/user_auth_test.exs), [admin_live_test.exs](../test/licorice_lane_web/live/admin_live_test.exs), user LiveView/session controller tests | `AccountsFixtures` (including `admin_user_fixture/1`) |
 | Inventory | [inventory_test.exs](../test/licorice_lane/inventory_test.exs), [inventory_lifecycle_test.exs](../test/licorice_lane/inventory_lifecycle_test.exs) | `ItemsFixtures`, `LocationsFixtures` |
+| Pagination and cache writes | [pagination_test.exs](../test/licorice_lane/pagination_test.exs), [write_cache_test.exs](../test/licorice_lane/write_cache_test.exs) | Existing domain fixtures |
+| Admin pagination and public inventory | [admin_pagination_test.exs](../test/licorice_lane_web/live/admin_pagination_test.exs), [inventory_live_test.exs](../test/licorice_lane_web/live/inventory_live_test.exs) | Existing account/domain fixtures |
 | Customers | [customers_test.exs](../test/licorice_lane/customers_test.exs) | `CustomersFixtures` |
 | Rentals | [rentals_test.exs](../test/licorice_lane/rentals_test.exs) | `RentalsFixtures` |
 | Messages and contact form | [messages_test.exs](../test/licorice_lane/messages_test.exs), [contact_live_test.exs](../test/licorice_lane_web/live/contact_live_test.exs) | `MessagesFixtures` |
 | Marketing and error pages | Tests under `test/licorice_lane_web/controllers` | `ConnCase` |
 
-[DataCase](../test/support/data_case.ex) and [ConnCase](../test/support/conn_case.ex) configure database sandbox support. Fixtures live in [test/support/fixtures](../test/support/fixtures). AdminLive tests cover authorization and dashboard mounting; detailed component workflows and public InventoryLive still need dedicated tests. Inventory lifecycle tests run synchronously because they exercise the shared cache. When extending these workflows, add focused web coverage alongside affected context tests.
+[DataCase](../test/support/data_case.ex) and [ConnCase](../test/support/conn_case.ex) configure database sandbox support. Fixtures live in [test/support/fixtures](../test/support/fixtures). AdminLive tests cover authorization and dashboard mounting. Dedicated web tests cover all four admin lists, pagination bounds, filter resets/preservation, component refresh after deletion, and public inventory stream IDs, filters, detail navigation, and PubSub refresh. Other detailed admin workflows still need coverage. Inventory lifecycle and cache invalidation tests run synchronously because they exercise the shared cache. When extending these workflows, add focused web coverage alongside affected context tests.

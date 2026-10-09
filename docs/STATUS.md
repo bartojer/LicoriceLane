@@ -1,6 +1,6 @@
 # Current implementation status
 
-Reviewed on October 9, 2026 against the working tree, including local uncommitted code. Feature descriptions come from source inspection; test results are recorded below. Update this file when completing or changing a workflow. Use [architecture](ARCHITECTURE.md) for code and test entry points.
+Reviewed on October 9, 2026 against the current source. Feature descriptions come from source inspection; test results are recorded below. Update this file when completing or changing a workflow. Use [architecture](ARCHITECTURE.md) for code and test entry points.
 
 ## Test validation
 
@@ -11,7 +11,8 @@ Validated on October 7, 2026 in Ubuntu WSL with Elixir 1.18.4, Erlang/OTP 28.0.2
 | Preserved original suite, seed 0 | 237 tests, 0 failures |
 | Focused inventory lifecycle, accounts, admin hooks, and admin routes, seed 0 | 98 tests, 0 failures |
 | October 7 full suite: `mix test --seed 0` | 261 tests, 0 failures |
-| October 9 full suite, including browser upload: `mix test --seed 0` | 278 tests, 0 failures |
+| October 9 upload snapshot, including browser upload: `mix test --seed 0` | 278 tests, 0 failures |
+| October 9 accepted refactor, pagination/cache/public inventory regressions and browser upload: `mix test --seed 0` | 298 tests, 0 failures |
 
 The October 7 suite had 20 test files and 24 additional cases. The [inventory lifecycle tests](../test/licorice_lane/inventory_lifecycle_test.exs) cover writes and side effects; [admin route tests](../test/licorice_lane_web/live/admin_live_test.exs), [authorization hook/plug tests](../test/licorice_lane_web/user_auth_test.exs), and the registration regression test cover admin access. Existing query assertions were strengthened and unused test bindings cleaned up.
 
@@ -21,7 +22,7 @@ The locked LiveView/lazy_html dependencies require Elixir 1.15 or newer. `.tool-
 
 ## Implemented in code
 
-The feature table describes the reviewed local working tree, including the earlier uncommitted admin refactor. See the commit scope below before assuming every listed local change is included in the upload commit.
+The feature table describes the current source, including the reviewed admin refactor and pagination changes.
 
 | Area | Current behavior | Entry point |
 | --- | --- | --- |
@@ -56,7 +57,7 @@ Visible buttons and schemas do not imply these workflows are complete. Keep busi
 - **Browser E2E runner:** The agreed default for expanded E2E coverage is official Playwright Test in TypeScript, with reproducible headless commands, isolated fixtures, JSON reports, and failure artifacts for agents. The working upload regression currently uses the Playwright library through an optional ExUnit-launched script. A full runner configuration, pinned project dependencies, reports/traces, and a required browser CI job have not been established. Preserve the existing regression during migration; see [testing strategy](TESTING.md).
 - **Admin realtime refresh:** DashboardComponent and MessagesComponent define `handle_info` callbacks, but PubSub messages go to the parent LiveView process. AdminLive currently ignores inventory refresh and updates only its message badge. Explicit forwarding/component updates and web tests are needed to establish list/modal/dashboard refresh behavior.
 - **Cache integration:** Cachex starts with a five-minute TTL and write invalidation is present. Query paths currently do not call the cache fetch/get/put helpers, so caching benefits are not established. Add caching and dependency-aware invalidation together if needed.
-- **Test coverage:** Inventory lifecycle tests cover atomic single/bulk creation and single-detail edits, rollback, stock defaults, single-item updates/deletion, warehouse totals, cache invalidation, and broadcasts. Admin tests cover registration privilege protection, admin plugs/mount hooks, route access, dashboard mounting, revoked privileges, and inventory upload workflows. Pagination, other detailed admin workflows, bulk-item deletion, and public InventoryLive still need dedicated coverage. Do not use seeds as test setup.
+- **Test coverage:** Inventory lifecycle tests cover atomic single/bulk creation and single-detail edits, rollback, stock defaults, single-item updates/deletion, warehouse totals, cache invalidation, and broadcasts. Admin tests cover registration privilege protection, admin plugs/mount hooks, route access, dashboard mounting, revoked privileges, and inventory upload workflows. Dedicated pagination/context/cache tests and admin/public inventory web tests now cover filtered totals, stable page boundaries, invalid/out-of-range inputs, list shrinkage, component refresh/filter preservation, and public stream updates. Other detailed admin workflows and bulk-item deletion still need dedicated coverage. Do not use seeds as test setup.
 - **Historical seed-hash issue:** The December 2025 encryption note reported missing hashes during seeding. Current changeset logic differs, seeds call `Customers.create_customer/1`, and customer tests include stored-hash and exact-search assertions. The old seed-specific failure has not been reproduced or declared fixed in this review. See [encryption notes](../ENCRYPTION_IMPLEMENTATION_STATUS.md).
 - **Image storage:** Add/edit now share UUID-based local storage and serving, configurable with `INVENTORY_UPLOAD_DIR`. Failed saves preserve the temporary upload and remove their copied images; component updates preserve active selections, and upload errors appear in the forms. Successful replacements retain old files because paths can be shared. Persistent storage across releases/hosts, backups, and automated old-image cleanup still need a deployment plan. See [architecture](ARCHITECTURE.md#upload-storage) and the historical [investigation](IMAGE_UPLOAD_INVESTIGATION.md).
 - **Production operations:** Runtime secret configuration and production asset tasks exist, but there is no project-specific deployment/backup/key-rotation runbook. The production mailer still needs a delivery adapter. Choose the deployment environment before documenting exact operational commands.
@@ -70,9 +71,9 @@ Visible buttons and schemas do not imply these workflows are complete. Keep busi
 
 ## Commit scope
 
-The inventory upload fixes and testing policy are being committed with their required runtime dependencies, helpers, and fixture-backed tests. Earlier admin pagination/refactor changes, customer/message context changes, public inventory UI adjustments, and unrelated test cleanups remain local. The architecture guide and earlier validation rows describe the broader local snapshot, not only the selected commit. Inspect source in the checkout when following those references.
+The upload repairs and testing policy were committed first as `f8c1998`, including their required runtime dependencies and tests. That selected commit was validated from an isolated export of the Git index: **270 tests, 0 failures**, including the real-browser upload regression, seed 0. The original broader local tree passed 278 tests and included eight earlier account/authorization tests.
 
-The selected commit was additionally tested from an isolated export of the Git index so that it does not depend on unstaged application changes: **270 tests, 0 failures**, including the real-browser upload regression, seed 0. The larger local working tree's 278-test result above includes eight earlier account/authorization tests that remain unstaged.
+The earlier local admin pagination/refactor, customer/message invalidation, public inventory adjustments, historical documentation, and test improvements were subsequently reviewed and accepted. This review adds shared pagination bounds, deterministic ordering, malformed-event handling, booking filter forms, and 20 regression cases. The latest validation row covers the complete source rather than only the original upload commit.
 
 ## Historical documents
 
