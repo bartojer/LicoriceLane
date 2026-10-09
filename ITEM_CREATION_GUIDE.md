@@ -4,6 +4,8 @@
 
 This guide demonstrates how to use `create_item_with_location/1` to add new items to your inventory.
 
+Reviewed against the working tree on October 7, 2026. See [architecture](docs/ARCHITECTURE.md#inventory-relationships-and-writes) for related schemas and [current status](docs/STATUS.md) for unfinished admin workflows.
+
 ## Function Signature
 
 ```elixir
@@ -12,12 +14,13 @@ LicoriceLane.Inventory.create_item_with_location(attrs)
 
 ## How It Works
 
-The function uses `Ecto.Multi` to perform three atomic operations:
+The function validates and normalizes attributes, then uses `Ecto.Multi` for two atomic database operations:
 1. **Create Item** - Inserts base item record
 2. **Create Location Data** - Creates either:
    - `SingleItem` record (for individual tracking) with `id` explicitly set to match `Item.id`
    - `ItemsLocation` record (for quantity tracking)
-3. **Broadcast Update** - Notifies subscribers of inventory changes via PubSub
+
+After a successful transaction, it invalidates inventory cache entries, broadcasts the PubSub update, and loads the item with its associations. Cache invalidation, broadcasting, and the final preload query are outside the transaction.
 
 ## Single Items (item_type: :single)
 
@@ -89,7 +92,7 @@ Items tracked by quantity (napkins, candles, etc.)
 ### Important Notes
 - One item record represents ALL units of that type
 - Can be stored at multiple locations with different quantities
-- `min_stock` is preserved (defaults to 10 from migration)
+- `min_stock` is preserved; the creation context supplies `10` when the attribute is absent. The base Item schema default is `0`, so direct Repo inserts do not apply this context default.
 
 ### Example: Create Bulk Napkins
 
@@ -206,7 +209,7 @@ item = Inventory.get_item_with_full_preloads(item_id)
 # - item.single_item (with location)
 # - item.items_locations (with locations)
 # - item.rental_bulk_items (with rental)
-# - item.rental_single_items (through single_item)
+# - item.rental_single_items (with single_item and its item)
 ```
 
 ## Schema Relationships
@@ -237,15 +240,18 @@ Item (id: 43, item_type: :bulk, min_stock: 50)
 
 ### Min Stock Behavior
 - **Single items**: Always set to `0` (automatic)
-- **Bulk items**: Uses provided value or defaults to `10` (from migration)
+- **Bulk items**: Uses provided value or defaults to `10` in the creation context when the attribute is absent
 - Used by `list_low_stock_items/0` to generate alerts
 
 ### PubSub Broadcasting
 - Every successful creation broadcasts `{:inventory_updated, item_id}`
 - Subscribers on topic `"inventory:updates"` receive real-time updates
 - Use in LiveView: `Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "inventory:updates")`
+- A LiveComponent subscription delivers messages to its parent LiveView process. The parent must explicitly refresh child components; a child `handle_info` callback alone is insufficient.
 
 ## Testing in IEx
+
+Use a disposable development database for this example; it writes sample inventory records. Automated tests should use the existing fixtures under `test/support/fixtures` rather than seeds.
 
 ```elixir
 # Start IEx with your app
@@ -288,3 +294,5 @@ After creating items, you can:
 - Query items with `list_filtered_items/2`
 - Check low stock with `list_low_stock_items/0`
 - Get warehouse quantities with `get_warehouse_quantities/1`
+
+`update_item/2` changes base item fields. Admin edits use `update_item_with_details/2`, which atomically updates base fields and single-item condition/status, then invalidates cache and broadcasts on success. Neither API moves single items or edits bulk location quantities. Context deletion exists, but the admin delete action is currently a placeholder; see [status](docs/STATUS.md#unfinished-workflows).

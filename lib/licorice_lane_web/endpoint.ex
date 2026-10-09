@@ -20,10 +20,15 @@ defmodule LicoriceLaneWeb.Endpoint do
   # You should set gzip to true if you are running phx.digest
   # when deploying your static files in production.
   plug Plug.Static,
+    at: "/uploads",
+    from: {LicoriceLane.Inventory.ImageStorage, :directory, []},
+    gzip: false
+
+  plug Plug.Static,
     at: "/",
     from: :licorice_lane,
     gzip: false,
-    only: LicoriceLaneWeb.static_paths()
+    only: LicoriceLaneWeb.static_paths() -- ["uploads"]
 
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.

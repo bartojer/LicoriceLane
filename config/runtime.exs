@@ -1,5 +1,9 @@
 import Config
 
+if upload_directory = System.get_env("INVENTORY_UPLOAD_DIR") do
+  config :licorice_lane, :inventory_upload_directory, Path.expand(upload_directory)
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

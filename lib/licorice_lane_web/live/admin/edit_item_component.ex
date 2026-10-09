@@ -2,18 +2,41 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
   use LicoriceLaneWeb, :live_component
 
   alias LicoriceLane.Inventory
+  alias LicoriceLaneWeb.InventoryImageUpload
+  import LicoriceLaneWeb.AdminHelpers
+
+  @impl true
+  def mount(socket) do
+    {:ok,
+     allow_upload(socket, :edit_item_image,
+       accept: ~w(.jpg .jpeg .png .gif .webp),
+       max_entries: 1,
+       max_file_size: 10_000_000
+     )}
+  end
 
   @impl true
   def update(assigns, socket) do
-    item = Inventory.get_item!(assigns.item_id)
-    changeset = Inventory.change_item(item)
+    item_id = Map.get(assigns, :item_id, socket.assigns[:item_id])
 
     socket =
-      socket
-      |> assign(assigns)
-      |> assign(:item, item)
-      |> assign(:changeset, changeset)
-      |> assign(:selected_category, item.category |> to_string())
+      if socket.assigns[:item] && socket.assigns.item.id == item_id do
+        assign(socket, assigns)
+      else
+        socket =
+          Enum.reduce(socket.assigns.uploads.edit_item_image.entries, socket, fn entry, acc ->
+            cancel_upload(acc, :edit_item_image, entry.ref)
+          end)
+
+        item = Inventory.get_item!(item_id)
+
+        socket
+        |> assign(assigns)
+        |> assign(:item, item)
+        |> assign(:changeset, Inventory.change_item(item))
+        |> assign(:form_params, %{})
+        |> assign(:selected_category, to_string(item.category))
+      end
 
     {:ok, socket}
   end
@@ -35,65 +58,37 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
     socket =
       socket
       |> assign(:changeset, changeset)
+      |> assign(:form_params, item_params)
       |> assign(:selected_category, selected_category)
 
     {:noreply, socket}
   end
 
+  def handle_event("cancel-upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :edit_item_image, ref)}
+  end
+
   def handle_event("save", %{"item" => item_params}, socket) do
+    socket = socket |> assign(:form_params, item_params) |> clear_flash(:error)
     item = socket.assigns.item
+    persist = &Inventory.update_item_with_details(item, &1)
 
-    result =
-      case item.item_type do
-        :single -> update_single_item(item, item_params)
-        :bulk -> Inventory.update_item(item, item_params)
-      end
-
-    case result do
+    case InventoryImageUpload.save(socket, :edit_item_image, item_params, persist) do
       {:ok, _item} ->
         send(self(), {:switch_tab, "inventory"})
         {:noreply, put_flash(socket, :info, "Item updated successfully!")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :changeset, changeset)}
+
+      {:error, :upload, message} ->
+        {:noreply, put_flash(socket, :error, message)}
     end
   end
 
   def handle_event("cancel", _params, socket) do
     send(self(), {:switch_tab, "inventory"})
     {:noreply, socket}
-  end
-
-  # Helper function to update single items with their SingleItem association
-  defp update_single_item(item, item_params) do
-    # Extract single_item specific fields
-    single_item_attrs = %{
-      "condition" => Map.get(item_params, "condition"),
-      "status" => Map.get(item_params, "status")
-    }
-
-    # Remove single_item fields from item_params
-    item_attrs =
-      item_params
-      |> Map.delete("condition")
-      |> Map.delete("status")
-
-    # Update item
-    with {:ok, updated_item} <- Inventory.update_item(item, item_attrs),
-         {:ok, _single_item} <-
-           update_single_item_record(updated_item.single_item, single_item_attrs) do
-      {:ok, updated_item}
-    else
-      {:error, changeset} -> {:error, changeset}
-    end
-  end
-
-  defp update_single_item_record(nil, _attrs), do: {:ok, nil}
-
-  defp update_single_item_record(single_item, attrs) do
-    single_item
-    |> LicoriceLane.Items.SingleItem.changeset(attrs)
-    |> LicoriceLane.Repo.update()
   end
 
   @impl true
@@ -121,6 +116,15 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
           </button>
         </div>
 
+        <p
+          :if={Phoenix.Flash.get(@flash, :error)}
+          id="edit-item-error"
+          role="alert"
+          class="mb-4 rounded bg-red-50 p-3 text-sm text-red-700"
+        >
+          {Phoenix.Flash.get(@flash, :error)}
+        </p>
+
         <.form
           for={@changeset}
           id="edit-item-form"
@@ -133,7 +137,7 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
             <label class="block text-sm font-medium text-gray-700 mb-2">Item Type</label>
             <div class="flex items-center">
               <span class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-800">
-                {item_type_label(@item.item_type)}
+                {item_type_label_long(@item.item_type)}
               </span>
               <span class="ml-3 text-sm text-gray-500">
                 (Item type cannot be changed after creation)
@@ -151,7 +155,12 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                 type="text"
                 name="item[name]"
                 id="item-name"
-                value={Phoenix.HTML.Form.normalize_value("text", @changeset.data.name || "")}
+                value={
+                  Phoenix.HTML.Form.normalize_value(
+                    "text",
+                    Ecto.Changeset.get_field(@changeset, :name) || ""
+                  )
+                }
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                 placeholder="e.g., Gold Chiavari Chair"
               />
@@ -159,8 +168,7 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                 {error_message(error)}
               </.error>
             </div>
-            
-    <!-- Category -->
+            <!-- Category -->
             <div>
               <label for="item-category" class="block text-sm font-medium text-gray-700">
                 Category *
@@ -184,8 +192,7 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                 {error_message(error)}
               </.error>
             </div>
-            
-    <!-- Description (full width) -->
+            <!-- Description (full width) -->
             <div class="sm:col-span-2">
               <label for="item-description" class="block text-sm font-medium text-gray-700">
                 Description *
@@ -196,13 +203,12 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                 rows="3"
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                 placeholder="Detailed description of the item..."
-              >{Phoenix.HTML.Form.normalize_value("textarea", @changeset.data.description || "")}</textarea>
+              >{Phoenix.HTML.Form.normalize_value("textarea", Ecto.Changeset.get_field(@changeset, :description) || "")}</textarea>
               <.error :for={error <- Keyword.get_values(@changeset.errors || [], :description)}>
                 {error_message(error)}
               </.error>
             </div>
-            
-    <!-- Rental Price -->
+            <!-- Rental Price -->
             <div>
               <label for="item-rental-price" class="block text-sm font-medium text-gray-700">
                 Rental Price
@@ -217,7 +223,10 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                   id="item-rental-price"
                   step="0.01"
                   value={
-                    Phoenix.HTML.Form.normalize_value("number", @changeset.data.rental_price || "")
+                    Phoenix.HTML.Form.normalize_value(
+                      "number",
+                      Ecto.Changeset.get_field(@changeset, :rental_price) || ""
+                    )
                   }
                   class="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                   placeholder="0.00"
@@ -227,15 +236,19 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                 {error_message(error)}
               </.error>
             </div>
-            
-    <!-- Color -->
+            <!-- Color -->
             <div>
               <label for="item-color" class="block text-sm font-medium text-gray-700">Color</label>
               <input
                 type="text"
                 name="item[color]"
                 id="item-color"
-                value={Phoenix.HTML.Form.normalize_value("text", @changeset.data.color || "")}
+                value={
+                  Phoenix.HTML.Form.normalize_value(
+                    "text",
+                    Ecto.Changeset.get_field(@changeset, :color) || ""
+                  )
+                }
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                 placeholder="e.g., Gold, White, Silver"
               />
@@ -243,29 +256,106 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                 {error_message(error)}
               </.error>
             </div>
-            
-    <!-- Image Path -->
+            <!-- Item Image Upload -->
             <div class="sm:col-span-2">
-              <label for="item-image-path" class="block text-sm font-medium text-gray-700">
-                Image Path
-              </label>
-              <input
-                type="text"
-                name="item[image_path]"
-                id="item-image-path"
-                value={Phoenix.HTML.Form.normalize_value("text", @changeset.data.image_path || "")}
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
-                placeholder="images/placeholder.png"
-              />
-              <p class="mt-1 text-xs text-gray-500">
-                Path to the item's image (drag and drop feature coming soon)
-              </p>
-              <.error :for={error <- Keyword.get_values(@changeset.errors || [], :image_path)}>
-                {error_message(error)}
-              </.error>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Item Image</label>
+              <!-- Current Image Preview -->
+              <%= if @item.image_path && Enum.empty?(@uploads.edit_item_image.entries) do %>
+                <div class="mb-4 flex items-center gap-4">
+                  <div class="relative">
+                    <img
+                      src={@item.image_path}
+                      alt={@item.name}
+                      class="h-24 w-24 object-cover rounded-md border border-gray-200"
+                    />
+                    <span class="absolute -top-2 -right-2 bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">
+                      Current
+                    </span>
+                  </div>
+                  <div class="text-sm text-gray-500">
+                    <p>Current image: {@item.image_path}</p>
+                    <p class="text-xs">Upload a new image below to replace it</p>
+                  </div>
+                </div>
+              <% end %>
+
+              <div
+                class="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-brand transition-colors"
+                phx-drop-target={@uploads.edit_item_image.ref}
+              >
+                <.live_file_input upload={@uploads.edit_item_image} class="sr-only" />
+                <div class="space-y-1 text-center">
+                  <%= if Enum.empty?(@uploads.edit_item_image.entries) do %>
+                    <svg
+                      class="mx-auto h-12 w-12 text-gray-400"
+                      stroke="currentColor"
+                      fill="none"
+                      viewBox="0 0 48 48"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                    <div class="flex text-sm text-gray-600">
+                      <label
+                        for={@uploads.edit_item_image.ref}
+                        class="relative cursor-pointer bg-white rounded-md font-medium text-brand hover:text-brand/80 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-brand"
+                      >
+                        <span>Upload a new image</span>
+                      </label>
+                      <p class="pl-1">or drag and drop</p>
+                    </div>
+                    <p class="text-xs text-gray-500">PNG, JPG, GIF, WebP up to 10MB</p>
+                  <% else %>
+                    <%= for entry <- @uploads.edit_item_image.entries do %>
+                      <div class="flex items-center gap-4">
+                        <.live_img_preview entry={entry} class="h-24 w-24 object-cover rounded-md" />
+                        <div class="flex-1 text-left">
+                          <p class="text-sm font-medium text-gray-900">{entry.client_name}</p>
+                          <p class="text-xs text-gray-500">
+                            {Float.round(entry.client_size / 1_000_000, 2)} MB
+                          </p>
+                          <div class="mt-1 w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              class="bg-brand h-2 rounded-full transition-all"
+                              style={"width: #{entry.progress}%"}
+                            >
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          phx-click="cancel-upload"
+                          phx-value-ref={entry.ref}
+                          phx-target={@myself}
+                          class="text-red-500 hover:text-red-700"
+                        >
+                          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <%= for err <- upload_errors(@uploads.edit_item_image, entry) do %>
+                        <p class="mt-2 text-sm text-red-600">{error_to_string(err)}</p>
+                      <% end %>
+                    <% end %>
+                  <% end %>
+                  <%= for err <- upload_errors(@uploads.edit_item_image) do %>
+                    <p class="mt-2 text-sm text-red-600">{error_to_string(err)}</p>
+                  <% end %>
+                </div>
+              </div>
             </div>
-            
-    <!-- Conditional Fields for Single Items -->
+            <!-- Conditional Fields for Single Items -->
             <div :if={@item.item_type == :single} class="sm:col-span-2 border-t pt-6">
               <h4 class="text-sm font-medium text-gray-900 mb-4">Single Item Details</h4>
               <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -281,7 +371,11 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                     value={
                       Phoenix.HTML.Form.normalize_value(
                         "text",
-                        (@item.single_item && @item.single_item.condition) || ""
+                        Map.get(
+                          @form_params,
+                          "condition",
+                          (@item.single_item && @item.single_item.condition) || ""
+                        )
                       )
                     }
                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
@@ -291,8 +385,7 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                     {error_message(error)}
                   </.error>
                 </div>
-                
-    <!-- Status -->
+                <!-- Status -->
                 <div>
                   <label for="item-status" class="block text-sm font-medium text-gray-700">
                     Status
@@ -304,19 +397,37 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                   >
                     <option
                       value="available"
-                      selected={@item.single_item && @item.single_item.status == :available}
+                      selected={
+                        Map.get(
+                          @form_params,
+                          "status",
+                          to_string(@item.single_item && @item.single_item.status)
+                        ) == "available"
+                      }
                     >
                       Available
                     </option>
                     <option
                       value="rented"
-                      selected={@item.single_item && @item.single_item.status == :rented}
+                      selected={
+                        Map.get(
+                          @form_params,
+                          "status",
+                          to_string(@item.single_item && @item.single_item.status)
+                        ) == "rented"
+                      }
                     >
                       Rented
                     </option>
                     <option
                       value="damaged"
-                      selected={@item.single_item && @item.single_item.status == :damaged}
+                      selected={
+                        Map.get(
+                          @form_params,
+                          "status",
+                          to_string(@item.single_item && @item.single_item.status)
+                        ) == "damaged"
+                      }
                     >
                       Damaged
                     </option>
@@ -327,8 +438,7 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                 </div>
               </div>
             </div>
-            
-    <!-- Conditional Fields for Bulk Items -->
+            <!-- Conditional Fields for Bulk Items -->
             <div :if={@item.item_type == :bulk} class="sm:col-span-2 border-t pt-6">
               <h4 class="text-sm font-medium text-gray-900 mb-4">Bulk Item Details</h4>
               <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -343,7 +453,10 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                     id="item-min-stock"
                     min="0"
                     value={
-                      Phoenix.HTML.Form.normalize_value("number", @changeset.data.min_stock || 0)
+                      Phoenix.HTML.Form.normalize_value(
+                        "number",
+                        Ecto.Changeset.get_field(@changeset, :min_stock) || 0
+                      )
                     }
                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                     placeholder="10"
@@ -355,8 +468,7 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
                     {error_message(error)}
                   </.error>
                 </div>
-                
-    <!-- Current Quantity Display (Read-only) -->
+                <!-- Current Quantity Display (Read-only) -->
                 <div>
                   <label class="block text-sm font-medium text-gray-700">Current Quantities</label>
                   <div class="mt-1 p-3 bg-gray-50 rounded-md">
@@ -372,8 +484,7 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
               </div>
             </div>
           </div>
-          
-    <!-- Action Buttons -->
+          <!-- Action Buttons -->
           <div class="mt-6 flex justify-end gap-3">
             <button
               type="button"
@@ -398,13 +509,17 @@ defmodule LicoriceLaneWeb.Admin.EditItemComponent do
 
   # Helper functions
 
-  defp item_type_label(:single), do: "Single Item (Individual Tracking)"
-  defp item_type_label(:bulk), do: "Bulk Item (Quantity Tracking)"
-  defp item_type_label(type), do: type |> to_string() |> String.capitalize()
-
   defp error_message({msg, opts}) do
     Enum.reduce(opts, msg, fn {key, value}, acc ->
       String.replace(acc, "%{#{key}}", to_string(value))
     end)
   end
+
+  defp error_to_string(:too_large), do: "File is too large (max 10MB)"
+
+  defp error_to_string(:not_accepted),
+    do: "Invalid file type. Please upload an image (PNG, JPG, GIF, WebP)"
+
+  defp error_to_string(:too_many_files), do: "Only one file allowed"
+  defp error_to_string(err), do: "Upload error: #{inspect(err)}"
 end

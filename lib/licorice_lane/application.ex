@@ -4,6 +4,7 @@ defmodule LicoriceLane.Application do
   @moduledoc false
 
   use Application
+  require Cachex.Spec
 
   @impl true
   def start(_type, _args) do
@@ -15,6 +16,14 @@ defmodule LicoriceLane.Application do
       {Phoenix.PubSub, name: LicoriceLane.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: LicoriceLane.Finch},
+      # Start Cachex for admin data caching (5 min TTL, cleanup every 30 sec)
+      {Cachex,
+       name: :admin_cache,
+       expiration:
+         Cachex.Spec.expiration(
+           default: :timer.minutes(5),
+           interval: :timer.seconds(30)
+         )},
       # Start a worker by calling: LicoriceLane.Worker.start_link(arg)
       # {LicoriceLane.Worker, arg},
       # Start to serve requests, typically the last entry

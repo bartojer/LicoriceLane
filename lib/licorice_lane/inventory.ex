@@ -1,8 +1,22 @@
 defmodule LicoriceLane.Inventory do
+  @moduledoc """
+  Inventory queries and item lifecycle operations for public browsing and admin tools.
+
+  Single items share their primary key with a `LicoriceLane.Items.SingleItem`
+  record; bulk quantities live in `LicoriceLane.Locations.ItemsLocation` rows.
+  Use `create_item_with_location/1` to create either representation atomically.
+
+  Successful item creates, updates, and deletes invalidate inventory cache entries
+  and broadcast `{:inventory_updated, item_id}` on the `"inventory:updates"` topic.
+  Query functions preload the associations needed by their callers; use
+  `get_item_with_full_preloads/1` when complete item details are required.
+  """
+
   import Ecto.Query
 
   alias LicoriceLane.Items.Item
   alias LicoriceLane.Repo
+  alias LicoriceLane.Cache
 
   @pubsub LicoriceLane.PubSub
   @topic "inventory:updates"
@@ -276,6 +290,7 @@ defmodule LicoriceLane.Inventory do
 
       case result do
         {:ok, %{item: item}} ->
+          Cache.invalidate_inventory()
           broadcast_inventory_update(item.id)
           # Return item with full preloads
           {:ok, get_item_with_full_preloads(item.id)}
@@ -544,11 +559,56 @@ defmodule LicoriceLane.Inventory do
 
     case result do
       {:ok, updated_item} ->
+        Cache.invalidate_inventory()
         broadcast_inventory_update(updated_item.id)
         {:ok, updated_item}
 
       error ->
         error
+    end
+  end
+
+  @doc """
+  Updates base item fields and, for single items, condition/status atomically.
+  An invalid tracking update rolls back the base item, including its image path.
+  Returns a fully preloaded item or an Item changeset with field errors. Cache
+  invalidation and PubSub notifications happen only after a successful commit.
+  Location and bulk quantities are unchanged.
+  """
+  def update_item_with_details(%Item{} = item, attrs) do
+    item = Repo.preload(item, :single_item)
+    changeset = Item.changeset(item, attrs)
+    multi = Ecto.Multi.new() |> Ecto.Multi.update(:item, changeset)
+
+    multi =
+      if item.item_type == :single && item.single_item do
+        details = Map.take(attrs, [:condition, :status, "condition", "status"])
+
+        Ecto.Multi.update(
+          multi,
+          :single_item,
+          LicoriceLane.Items.SingleItem.changeset(item.single_item, details)
+        )
+      else
+        multi
+      end
+
+    case Repo.transaction(multi) do
+      {:ok, %{item: updated}} ->
+        Cache.invalidate_inventory()
+        broadcast_inventory_update(updated.id)
+        {:ok, get_item_with_full_preloads(updated.id)}
+
+      {:error, :item, invalid, _} ->
+        {:error, invalid}
+
+      {:error, :single_item, invalid, _} ->
+        invalid =
+          Enum.reduce(invalid.errors, changeset, fn {field, {message, opts}}, acc ->
+            Ecto.Changeset.add_error(acc, field, message, opts)
+          end)
+
+        {:error, %{invalid | action: :update}}
     end
   end
 
@@ -560,6 +620,7 @@ defmodule LicoriceLane.Inventory do
 
     case result do
       {:ok, deleted_item} ->
+        Cache.invalidate_inventory()
         broadcast_inventory_update(deleted_item.id)
         {:ok, deleted_item}
 
