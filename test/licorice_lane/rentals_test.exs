@@ -2,7 +2,6 @@ defmodule LicoriceLane.RentalsTest do
   use LicoriceLane.DataCase
 
   alias LicoriceLane.Rentals
-  alias LicoriceLane.Rentals.Rental
 
   import LicoriceLane.RentalsFixtures
   import LicoriceLane.CustomersFixtures
@@ -31,6 +30,7 @@ defmodule LicoriceLane.RentalsTest do
 
       [fetched] = Rentals.list_rentals()
 
+      assert fetched.id == rental.id
       assert Ecto.assoc_loaded?(fetched.customer)
       assert Ecto.assoc_loaded?(fetched.rental_single_items)
       assert Ecto.assoc_loaded?(fetched.rental_bulk_items)

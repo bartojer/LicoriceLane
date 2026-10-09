@@ -124,14 +124,14 @@ defmodule LicoriceLane.CustomersTest do
 
   describe "search_customers_by_name/1" do
     test "finds customers with partial name match" do
-      customer_fixture(%{name: "ABC Company"})
+      company = customer_fixture(%{name: "ABC Company"})
       customer_fixture(%{name: "XYZ Corporation"})
       abc_customer = customer_fixture(%{name: "Another ABC Business"})
 
       results = Customers.search_customers_by_name("ABC")
 
       assert length(results) == 2
-      assert Enum.any?(results, &(&1.name =~ "ABC"))
+      assert Enum.sort(Enum.map(results, & &1.id)) == Enum.sort([company.id, abc_customer.id])
     end
   end
 

@@ -36,6 +36,7 @@ defmodule LicoriceLane.InventoryTest do
       assert Inventory.normalize_category_filter(["candle", "linen"]) == [:candle, :linen]
     end
 
+    @tag :capture_log
     test "returns empty list for empty list" do
       assert Inventory.normalize_category_filter([]) == []
     end
@@ -85,6 +86,7 @@ defmodule LicoriceLane.InventoryTest do
       result = Inventory.filter_by_categories(query, []) |> Repo.all()
 
       assert length(result) == 3
+      assert Enum.sort(Enum.map(result, & &1.id)) == Enum.sort([c.id, t.id, l.id])
     end
 
     test "filters by single category", %{candle: candle} do

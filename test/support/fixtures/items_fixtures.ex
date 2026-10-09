@@ -49,7 +49,7 @@ defmodule LicoriceLane.ItemsFixtures do
       |> Repo.insert!()
 
     # Create SingleItem record
-    single_item =
+    _single_item =
       %SingleItem{
         id: item.id,
         condition: attrs[:condition] || "New",

@@ -185,6 +185,72 @@ defmodule LicoriceLaneWeb.UserAuthTest do
     end
   end
 
+  describe "on_mount :ensure_admin" do
+    test "continues for an admin with a valid session" do
+      admin = admin_user_fixture()
+      session = %{"user_token" => Accounts.generate_user_session_token(admin)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:ensure_admin, %{}, session, %LiveView.Socket{})
+
+      assert socket.assigns.current_user.id == admin.id
+      assert socket.assigns.current_user.admin
+    end
+
+    test "halts a logged-in non-admin", %{user: user} do
+      session = %{"user_token" => Accounts.generate_user_session_token(user)}
+
+      assert {:halt, socket} =
+               UserAuth.on_mount(:ensure_admin, %{}, session, admin_socket())
+
+      assert socket.assigns.current_user.id == user.id
+      assert {:redirect, %{to: "/"}} = socket.redirected
+      assert Phoenix.Flash.get(socket.assigns.flash, :error) =~ "must be an admin"
+    end
+
+    test "halts an anonymous mount" do
+      assert {:halt, socket} = UserAuth.on_mount(:ensure_admin, %{}, %{}, admin_socket())
+      assert socket.assigns.current_user == nil
+      assert {:redirect, %{to: "/"}} = socket.redirected
+    end
+
+    test "halts a mount with an invalid session token" do
+      session = %{"user_token" => "invalid_token"}
+
+      assert {:halt, socket} =
+               UserAuth.on_mount(:ensure_admin, %{}, session, admin_socket())
+
+      assert socket.assigns.current_user == nil
+      assert {:redirect, %{to: "/"}} = socket.redirected
+    end
+  end
+
+  describe "require_admin/2" do
+    test "allows an admin", %{conn: conn} do
+      conn = conn |> assign(:current_user, admin_user_fixture()) |> UserAuth.require_admin([])
+      refute conn.halted
+      refute conn.status
+    end
+
+    test "halts a logged-in non-admin", %{conn: conn, user: user} do
+      conn =
+        conn
+        |> fetch_flash()
+        |> assign(:current_user, user)
+        |> UserAuth.require_admin([])
+
+      assert conn.halted
+      assert redirected_to(conn) == ~p"/users/log_in"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "must be an admin"
+    end
+
+    test "halts an anonymous request", %{conn: conn} do
+      conn = conn |> fetch_flash() |> UserAuth.require_admin([])
+      assert conn.halted
+      assert redirected_to(conn) == ~p"/users/log_in"
+    end
+  end
+
   describe "on_mount :redirect_if_user_is_authenticated" do
     test "redirects if there is an authenticated  user ", %{conn: conn, user: user} do
       user_token = Accounts.generate_user_session_token(user)
@@ -224,6 +290,13 @@ defmodule LicoriceLaneWeb.UserAuthTest do
       refute conn.halted
       refute conn.status
     end
+  end
+
+  defp admin_socket do
+    %LiveView.Socket{
+      endpoint: LicoriceLaneWeb.Endpoint,
+      assigns: %{__changed__: %{}, flash: %{}}
+    }
   end
 
   describe "require_authenticated_user/2" do

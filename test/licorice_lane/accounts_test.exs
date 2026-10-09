@@ -49,6 +49,12 @@ defmodule LicoriceLane.AccountsTest do
   end
 
   describe "register_user/1" do
+    test "does not grant admin access through registration attributes" do
+      assert {:ok, user} = Accounts.register_user(valid_user_attributes(%{admin: true}))
+      refute user.admin
+      refute Accounts.get_user!(user.id).admin
+    end
+
     test "requires email and password to be set" do
       {:error, changeset} = Accounts.register_user(%{})
 
