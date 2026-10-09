@@ -65,25 +65,25 @@ defmodule LicoriceLaneWeb.InventoryLive do
           <div class="flex gap-2">
             <button
               phx-click="show_all"
-              class="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand/90 transition-colors"
+              class={category_button_class(@selected_category == "all")}
             >
               All
             </button>
             <button
               phx-click="show_lighting"
-              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              class={category_button_class(@selected_category == "lighting")}
             >
               Lighting
             </button>
             <button
               phx-click="show_tableware"
-              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              class={category_button_class(@selected_category == "tableware")}
             >
               Tableware
             </button>
             <button
               phx-click="show_linen"
-              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              class={category_button_class(@selected_category == "linen")}
             >
               Linens
             </button>
@@ -232,6 +232,14 @@ defmodule LicoriceLaneWeb.InventoryLive do
     |> Decimal.round(2)
     |> Decimal.to_string()
     |> then(&"$#{&1}")
+  end
+
+  defp category_button_class(true) do
+    "px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand/90 transition-colors"
+  end
+
+  defp category_button_class(false) do
+    "px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
   end
 
   defp availability_status(item) do

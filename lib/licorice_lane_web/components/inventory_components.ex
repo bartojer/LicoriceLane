@@ -1,6 +1,6 @@
 defmodule LicoriceLaneWeb.InventoryComponents do
   use Phoenix.Component
-  
+
   use Phoenix.VerifiedRoutes,
     endpoint: LicoriceLaneWeb.Endpoint,
     router: LicoriceLaneWeb.Router,
@@ -11,77 +11,74 @@ defmodule LicoriceLaneWeb.InventoryComponents do
 
   def inventory_card(assigns) do
     ~H"""
-    <.link patch={~p"/inventory/#{@item.id}"} class="block">
-      <div
-        id={@id}
-        class="group relative bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
-      >
-      <!-- Product Image -->
-      <div class="aspect-square w-full overflow-hidden rounded-t-lg bg-gray-200">
-        <%= if @item.image_path do %>
-          <img src={@item.image_path} alt={@item.name} class="h-full w-full object-cover" />
-        <% else %>
-          <div class="h-full w-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
-            <div class="text-center text-gray-500">
-              <svg
-                class="mx-auto h-16 w-16 mb-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1"
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+    <.link patch={~p"/inventory/#{@item.id}"} id={@id} class="block">
+      <div class="group relative bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200">
+        <!-- Product Image -->
+        <div class="aspect-square w-full overflow-hidden rounded-t-lg bg-gray-200">
+          <%= if @item.image_path do %>
+            <img src={@item.image_path} alt={@item.name} class="h-full w-full object-cover" />
+          <% else %>
+            <div class="h-full w-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
+              <div class="text-center text-gray-500">
+                <svg
+                  class="mx-auto h-16 w-16 mb-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                </path>
-              </svg>
-              <p class="text-sm">Decor Item Image</p>
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  >
+                  </path>
+                </svg>
+                <p class="text-sm">Decor Item Image</p>
+              </div>
             </div>
-          </div>
-        <% end %>
-      </div>
-      
+          <% end %>
+        </div>
+
     <!-- Product Info -->
-      <div class="p-4">
-        <div class="flex justify-between items-start mb-2">
-          <h3 class="text-lg font-semibold text-gray-900 group-hover:text-brand transition-colors">
-            {@item.name}
-          </h3>
-          <%= if availability_status(@item) == :available do %>
-            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              {availability_label(@item)}
-            </span>
-          <% else %>
-            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-              Out of Stock
-            </span>
-          <% end %>
-        </div>
+        <div class="p-4">
+          <div class="flex justify-between items-start mb-2">
+            <h3 class="text-lg font-semibold text-gray-900 group-hover:text-brand transition-colors">
+              {@item.name}
+            </h3>
+            <%= if availability_status(@item) == :available do %>
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                {availability_label(@item)}
+              </span>
+            <% else %>
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                Out of Stock
+              </span>
+            <% end %>
+          </div>
 
-        <p class="text-sm text-gray-600 mb-3">
-          {@item.description}
-        </p>
+          <p class="text-sm text-gray-600 mb-3">
+            {@item.description}
+          </p>
 
-        <div class="flex justify-between items-center">
-          <span class="text-xl font-bold text-brand">
-            {format_price(@item.rental_price)}
-          </span>
-          <%= if availability_status(@item) == :available do %>
-            <button class="px-4 py-2 bg-brand text-white text-sm rounded-lg hover:bg-brand/90 transition-colors">
-              Add to Cart
-            </button>
-          <% else %>
-            <button
-              disabled
-              class="px-4 py-2 bg-gray-300 text-gray-500 text-sm rounded-lg cursor-not-allowed"
-            >
-              Sold Out
-            </button>
-          <% end %>
+          <div class="flex justify-between items-center">
+            <span class="text-xl font-bold text-brand">
+              {format_price(@item.rental_price)}
+            </span>
+            <%= if availability_status(@item) == :available do %>
+              <button class="px-4 py-2 bg-brand text-white text-sm rounded-lg hover:bg-brand/90 transition-colors">
+                Add to Cart
+              </button>
+            <% else %>
+              <button
+                disabled
+                class="px-4 py-2 bg-gray-300 text-gray-500 text-sm rounded-lg cursor-not-allowed"
+              >
+                Sold Out
+              </button>
+            <% end %>
+          </div>
         </div>
-      </div>
       </div>
     </.link>
     """
