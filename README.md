@@ -34,7 +34,7 @@ mix phx.server
 
 Open [localhost:4000](http://localhost:4000). You can also start an interactive server with `iex -S mix phx.server`.
 
-**`mix setup` runs seeds.** [priv/repo/seeds.exs](priv/repo/seeds.exs) deletes existing customers, inventory, locations, rentals, rental item rows, and location history before inserting sample data. Use this setup path only for a disposable development database. `mix ecto.setup` also runs seeds, and `mix ecto.reset` drops and recreates the database.
+**`mix setup` runs seeds.** [priv/repo/seeds.exs](priv/repo/seeds.exs) transactionally replaces business records with [managed rental samples](docs/SEED_DATA.md), including reservations, multi-warehouse checkout, partial returns and overdue/returned/cancelled examples. Login accounts and tokens remain available. Use this setup path only for a disposable development database. `mix ecto.setup` also runs seeds, and `mix ecto.reset` drops and recreates the entire database, including accounts.
 
 ### Returning to an existing database
 
