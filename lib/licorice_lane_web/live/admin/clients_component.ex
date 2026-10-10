@@ -2,6 +2,7 @@ defmodule LicoriceLaneWeb.Admin.ClientsComponent do
   use LicoriceLaneWeb, :live_component
 
   alias LicoriceLane.Customers
+  alias LicoriceLane.Customers.Customer
   import LicoriceLaneWeb.AdminHelpers
 
   @impl true
@@ -65,6 +66,17 @@ defmodule LicoriceLaneWeb.Admin.ClientsComponent do
     {:noreply, open_customer(socket, params["customer-id"], :view)}
   end
 
+  def handle_event("new_customer", _params, socket) do
+    customer = %Customer{}
+
+    {:noreply,
+     socket
+     |> assign(:selected_customer, customer)
+     |> assign(:customer_mode, :new)
+     |> assign(:customer_form, to_form(Customers.change_customer(customer)))
+     |> assign(:customer_notice, nil)}
+  end
+
   def handle_event("edit_customer", params, socket) do
     {:noreply, open_customer(socket, params["customer-id"], :edit)}
   end
@@ -76,8 +88,9 @@ defmodule LicoriceLaneWeb.Admin.ClientsComponent do
   def handle_event(
         "validate_customer",
         %{"customer" => params},
-        %{assigns: %{customer_mode: :edit}} = socket
-      ) do
+        %{assigns: %{customer_mode: mode}} = socket
+      )
+      when mode in [:new, :edit] and is_map(params) do
     changeset =
       socket.assigns.selected_customer
       |> Customers.change_customer(params)
@@ -89,14 +102,28 @@ defmodule LicoriceLaneWeb.Admin.ClientsComponent do
   def handle_event(
         "save_customer",
         %{"customer" => params},
-        %{assigns: %{customer_mode: :edit}} = socket
-      ) do
-    case Customers.update_customer(socket.assigns.selected_customer, params) do
+        %{assigns: %{customer_mode: mode}} = socket
+      )
+      when mode in [:new, :edit] and is_map(params) do
+    result =
+      case mode do
+        :new -> Customers.create_customer(params)
+        :edit -> Customers.update_customer(socket.assigns.selected_customer, params)
+      end
+
+    case result do
       {:ok, _customer} ->
         {:noreply,
          socket
          |> close_customer()
-         |> assign(:customer_notice, {:info, "Customer updated successfully."})
+         |> assign(
+           :customer_notice,
+           {:info,
+            if(mode == :new,
+              do: "Customer created successfully.",
+              else: "Customer updated successfully."
+            )}
+         )
          |> load_customers()}
 
       {:error, changeset} ->
@@ -162,12 +189,16 @@ defmodule LicoriceLaneWeb.Admin.ClientsComponent do
         <div class="flex justify-between items-center mb-6">
           <h3 class="text-lg leading-6 font-medium text-gray-900">Client Management</h3>
 
-          <button class="bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand/90 transition-colors">
+          <button
+            phx-click="new_customer"
+            phx-target={@myself}
+            class="bg-brand text-white px-4 py-2 rounded-lg hover:bg-brand/90 transition-colors"
+          >
             Add New Client
           </button>
         </div>
         <p
-          :if={@customer_notice && @customer_mode != :edit}
+          :if={@customer_notice && @customer_mode not in [:new, :edit]}
           id="customer-notice"
           role={if elem(@customer_notice, 0) == :error, do: "alert", else: "status"}
           class="mb-4 rounded bg-gray-50 p-3 text-sm text-gray-900"
@@ -266,12 +297,18 @@ defmodule LicoriceLaneWeb.Admin.ClientsComponent do
         on_cancel={JS.push("close_customer", target: @myself)}
       >
         <h3 id="customer-detail-modal-title" class="text-lg font-semibold text-gray-900">
-          {if @customer_mode == :edit, do: "Edit Customer", else: "Customer Details"}
+          {case @customer_mode do
+            :new -> "Add New Client"
+            :edit -> "Edit Customer"
+            :view -> "Customer Details"
+          end}
         </h3>
         <p id="customer-detail-modal-description" class="mt-2 text-sm text-gray-500">
-          {if @customer_mode == :edit,
-            do: "Update this customer's contact information, billing address and notes.",
-            else: "Contact information, billing details, notes and recorded locations."}
+          {case @customer_mode do
+            :new -> "Enter the customer's name and any contact, billing or internal notes."
+            :edit -> "Update this customer's contact information, billing address and notes."
+            :view -> "Contact information, billing details, notes and recorded locations."
+          end}
         </p>
         <div :if={@customer_mode == :view} class="mt-4 space-y-6">
           <dl class="space-y-4">
@@ -313,9 +350,9 @@ defmodule LicoriceLaneWeb.Admin.ClientsComponent do
           </div>
         </div>
         <.simple_form
-          :if={@customer_mode == :edit}
+          :if={@customer_mode in [:new, :edit]}
           for={@customer_form}
-          id="customer-edit-form"
+          id={if @customer_mode == :new, do: "customer-create-form", else: "customer-edit-form"}
           phx-change="validate_customer"
           phx-submit="save_customer"
           phx-target={@myself}
@@ -336,7 +373,9 @@ defmodule LicoriceLaneWeb.Admin.ClientsComponent do
           <.input field={@customer_form[:notes]} type="textarea" label="Notes" />
           <:actions>
             <.button type="button" phx-click="close_customer" phx-target={@myself}>Cancel</.button>
-            <.button type="submit" phx-disable-with="Saving...">Save Customer</.button>
+            <.button type="submit" phx-disable-with="Saving...">
+              {if @customer_mode == :new, do: "Create Customer", else: "Save Customer"}
+            </.button>
           </:actions>
         </.simple_form>
       </.modal>

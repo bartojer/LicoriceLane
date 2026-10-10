@@ -147,7 +147,7 @@ defmodule LicoriceLane.Customers do
   end
 
   @doc """
-  Returns a changeset for validating customer edits without persisting them.
+  Returns a changeset for validating customer fields without persisting them.
   """
   def change_customer(%Customer{} = customer, attrs \\ %{}) do
     Customer.changeset(customer, attrs)
