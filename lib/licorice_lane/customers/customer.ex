@@ -34,24 +34,11 @@ defmodule LicoriceLane.Customers.Customer do
   end
 
   defp maybe_put_hash(changeset, source_field, hash_field) do
-    # For new records, get from changes. For updates, try changes first, then fall back to existing data
-    value =
-      case fetch_change(changeset, source_field) do
-        {:ok, val} when not is_nil(val) and val != "" ->
-          val
+    value = get_field(changeset, source_field)
 
-        _ ->
-          # For updates without changes to this field, use existing value
-          case changeset.data do
-            %{__meta__: %{state: :loaded}} -> Map.get(changeset.data, source_field)
-            _ -> nil
-          end
-      end
-
-    # Set hash field if we have a valid value
-    # SHA256 type will automatically hash the plaintext value on dump
-    # Use force_change to avoid the type's equal? check which fails with nil
-    if value && value != "" do
+    # SHA256 hashes the current plaintext value on dump. Explicit clearing must also
+    # clear the lookup column. Force changes because this type cannot compare with nil.
+    if changed?(changeset, source_field) or (value && value != "") do
       force_change(changeset, hash_field, value)
     else
       changeset

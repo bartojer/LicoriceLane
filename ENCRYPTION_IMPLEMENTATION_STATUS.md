@@ -1,6 +1,6 @@
 # Customer data encryption
 
-Reviewed against the working tree on October 7, 2026. This replaces the December 12, 2025 debugging note with current implementation details and a clearly scoped historical issue. See [architecture](docs/ARCHITECTURE.md) and [current status](docs/STATUS.md) for related workflows.
+Reviewed against the working tree on October 9, 2026. This replaces the December 12, 2025 debugging note with current implementation details and a clearly scoped historical issue. See [architecture](docs/ARCHITECTURE.md) and [current status](docs/STATUS.md) for related workflows.
 
 ## Current implementation
 
@@ -16,6 +16,8 @@ Reviewed against the working tree on October 7, 2026. This replaces the December
 Customer phone, email, contact person, billing address, and notes are stored through `LicoriceLane.Encrypted.Binary` using the Vault's AES-GCM cipher. Name remains plaintext for case-insensitive substring search. Decryption happens when Ecto loads encrypted fields.
 
 The customer changeset derives `email_hash` and `phone_hash` from the source field values and uses `Cloak.Ecto.SHA256` to hash them on dump. Context queries pass exact email/phone values to those typed columns. Combined customer search merges name, email, and phone results and deduplicates records. No partial email/phone matching or normalization of case/phone formatting is implemented.
+
+Customer editing regenerates lookup hashes from the current changeset values. Explicitly clearing an optional email or phone also clears its stored hash; unchanged contact fields retain their exact lookup behavior. Context and admin regressions cover replacement/clearing of contact values, encrypted storage after edits, and form validation without persistence. Existing records whose contact field was cleared before this repair may still have an old lookup hash; no data backfill is performed by this change.
 
 [Messages.Message](lib/licorice_lane/messages/message.ex) also encrypts email, phone, and message body and uses SHA256 lookup hashes. Message names and admin notes remain plaintext.
 

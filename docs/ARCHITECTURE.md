@@ -50,6 +50,10 @@ The custom [HMAC type](../lib/licorice_lane/hashed/hmac.ex) is configured but un
 
 Customer search pagination currently builds the combined search result list and slices it in memory. The unfiltered customer list uses database pagination. Avoid introducing partial matching over encrypted fields or logging loaded customer structs.
 
+Admin ClientsComponent provides a details modal with all customer fields and recorded locations, plus a prefilled edit form for name, contact person, email, phone, billing address and notes. `Customers.change_customer/2` validates drafts; `update_customer/2` persists them and invalidates dependent cache entries only after success. The existing schema requires name, validates email, and accepts phone in `123-4567` format. Optional fields can be cleared; clearing email/phone also clears their lookup hash columns so old exact searches no longer match.
+
+The component keeps the selected customer on the server and ignores IDs supplied in save parameters. Validation errors retain the form; cancellation discards it. Successful saves reload the current searched page, clamping bounds if an edit removes a matching row. Component updates and message-badge refreshes preserve an open edit form. Missing/malformed selections return an unavailable notice; edits to a deleted record return an error changeset rather than raising. Closing a modal reloads the list without resetting search/page. Customer creation via the `Add New Client` button remains unimplemented.
+
 ## Rentals and booking terminology
 
 Bookings and rentals refer to the same `Rental` entity. `RentalSingleItem` connects a rental to a `SingleItem`; `RentalBulkItem` connects a rental to an `Item` with a quantity.
@@ -115,7 +119,7 @@ Admin add/edit components keep their file inputs mounted during previews and ini
 | Pagination and cache writes | [pagination_test.exs](../test/licorice_lane/pagination_test.exs), [write_cache_test.exs](../test/licorice_lane/write_cache_test.exs) | Existing domain fixtures |
 | Admin pagination, inventory deletion and public inventory | [admin_pagination_test.exs](../test/licorice_lane_web/live/admin_pagination_test.exs), [admin_inventory_delete_test.exs](../test/licorice_lane_web/live/admin_inventory_delete_test.exs), [inventory_live_test.exs](../test/licorice_lane_web/live/inventory_live_test.exs) | Existing account/domain fixtures |
 | Admin realtime refresh | [admin_realtime_test.exs](../test/licorice_lane_web/live/admin_realtime_test.exs) | Existing account/inventory/location/message fixtures |
-| Customers | [customers_test.exs](../test/licorice_lane/customers_test.exs) | `CustomersFixtures` |
+| Customers | [customers_test.exs](../test/licorice_lane/customers_test.exs), [admin_customers_test.exs](../test/licorice_lane_web/live/admin_customers_test.exs) | `CustomersFixtures`, `LocationsFixtures` |
 | Rentals | [rentals_test.exs](../test/licorice_lane/rentals_test.exs) | `RentalsFixtures` |
 | Messages and contact form | [messages_test.exs](../test/licorice_lane/messages_test.exs), [contact_live_test.exs](../test/licorice_lane_web/live/contact_live_test.exs) | `MessagesFixtures` |
 | Marketing and error pages | Tests under `test/licorice_lane_web/controllers` | `ConnCase` |

@@ -23,6 +23,10 @@ Validated on October 7, 2026 in Ubuntu WSL with Elixir 1.18.4, Erlang/OTP 28.0.2
 | October 9 admin realtime refresh: `mix test --exclude browser --seed 0` | 333 total cases, 331 passed, 2 browser cases excluded and run separately below |
 | October 9 admin realtime refresh: upload browser regression with native WSL Node/Playwright Chromium, seed 0 | 1 selected browser case passed, 13 excluded |
 | October 9 admin realtime refresh: deletion browser regression with native WSL Node/Playwright Chromium, seed 0 | 1 selected browser case passed, 9 excluded |
+| October 9 customer details/editing: focused customer context/cache/admin/pagination tests, seed 0 | 59 tests, 0 failures |
+| October 9 customer details/editing: `mix test --exclude browser --seed 0` | 351 total cases, 349 passed, 2 browser cases excluded and run separately below |
+| October 9 customer details/editing: upload browser regression with native WSL Node/Playwright Chromium, seed 0 | 1 selected browser case passed, 13 excluded |
+| October 9 customer details/editing: deletion browser regression with native WSL Node/Playwright Chromium, seed 0 | 1 selected browser case passed, 9 excluded |
 
 The October 7 suite had 20 test files and 24 additional cases. The [inventory lifecycle tests](../test/licorice_lane/inventory_lifecycle_test.exs) cover writes and side effects; [admin route tests](../test/licorice_lane_web/live/admin_live_test.exs), [authorization hook/plug tests](../test/licorice_lane_web/user_auth_test.exs), and the registration regression test cover admin access. Existing query assertions were strengthened and unused test bindings cleaned up.
 
@@ -33,6 +37,8 @@ Admin inventory deletion adds five context regressions, nine LiveView regression
 Booking event-date filtering adds four rental context regressions and three admin LiveView regressions. They cover UTC day boundaries, event date independently of pickup date, all existing status combinations, filtered totals and stable pagination, page reset, clearing, missing event dates, invalid inputs, and filter/page preservation during component refresh.
 
 Admin realtime refresh adds thirteen [LiveView regressions](../test/licorice_lane_web/live/admin_realtime_test.exs) covering context broadcasts, two admin sessions, filters/page preservation, page clamping, queued stale events, notes drafts, deletion confirmations, inactive tabs, and add/edit upload preservation. All 333 cases passed across the full server suite and separate upload/deletion browser runs, with no skips. Changed-file formatting and asset builds also passed. An initial Windows Edge run passed both browser cases, but a later upload run hit the documented `ERR_CONNECTION_REFUSED` forwarding problem; final validation runs the browser natively in WSL, as described in [testing](TESTING.md).
+
+Customer details/editing adds eleven [admin LiveView regressions](../test/licorice_lane_web/live/admin_customers_test.exs) and seven customer context/cache cases. They cover full details/locations, escaped multiline notes, optional fields, validation/retry/cancellation, draft preservation during refresh, search/page retention and clamping, malformed or deleted records, server-held selection, encrypted storage after edits, lookup hash replacement/clearing, and cache behavior. All 351 cases passed across the full server suite and separate upload/deletion browser runs, with no skips; changed-file formatting and asset builds passed. The `Add New Client` button remains a separate unfinished workflow.
 
 The locked LiveView/lazy_html dependencies require Elixir 1.15 or newer. `.tool-versions` pins the validated runtime, and [README](../README.md#running-tests-from-windows-through-wsl) documents the project-local WSL tool/build setup. No seeds or database resets were used for these runs.
 
@@ -49,7 +55,7 @@ The feature table describes the current source, including the reviewed admin ref
 | Dashboard | Database-backed booking count, low-stock list, and recent bookings | [DashboardComponent](../lib/licorice_lane_web/live/admin/dashboard_component.ex) |
 | Inventory | Search/category filters, pagination, per-warehouse quantity queries, atomic single/bulk creation, base item editing, image uploads, confirmed deletion of unreferenced single/bulk items | [Inventory](../lib/licorice_lane/inventory.ex), admin inventory/add/edit components |
 | Bookings | Paginated listing with combined status and UTC event-date filters; changing either filter resets the page, and clearing the date restores all dates | [BookingsComponent](../lib/licorice_lane_web/live/admin/bookings_component.ex), [Rentals](../lib/licorice_lane/rentals.ex) |
-| Customers | Paginated listing and name/exact-email/exact-phone search; context CRUD | [ClientsComponent](../lib/licorice_lane_web/live/admin/clients_component.ex), [Customers](../lib/licorice_lane/customers.ex) |
+| Customers | Paginated listing and name/exact-email/exact-phone search; full details/location modal and validated editing with cancellation, error retention and filtered-page refresh; context CRUD | [ClientsComponent](../lib/licorice_lane_web/live/admin/clients_component.ex), [Customers](../lib/licorice_lane/customers.ex) |
 | Admin messages | Paginated name search/status filters, detail modal, status changes, internal notes, opening-new-message mark-as-read operation | [MessagesComponent](../lib/licorice_lane_web/live/admin/messages_component.ex) |
 | Write side effects | Inventory/customer/message cache invalidation; inventory and message create/update broadcasts | Contexts and [Cache](../lib/licorice_lane/cache.ex) |
 
@@ -61,7 +67,7 @@ Public inventory receives inventory PubSub events and has a listing refresh hand
 | --- | --- | --- |
 | Booking details and updates | `view_rental` and `update_rental` handlers are TODO/no-ops | [BookingsComponent](../lib/licorice_lane_web/live/admin/bookings_component.ex) |
 | Rental lifecycle writes | Rentals context has read queries only; creating/updating/returning rentals needs a context API and inventory effects | [Rentals](../lib/licorice_lane/rentals.ex) |
-| Customer details and editing | `view_customer` and `edit_customer` handlers are TODO/no-ops | [ClientsComponent](../lib/licorice_lane_web/live/admin/clients_component.ex) |
+| Customer creation | `Add New Client` button has no event handler; context creation exists | [ClientsComponent](../lib/licorice_lane_web/live/admin/clients_component.ex) |
 | Admin provisioning | No seeded admin account, promotion context API, or provisioning UI | [README bootstrap](../README.md#local-admin-access) |
 
 Visible buttons and schemas do not imply these workflows are complete. Keep business operations in contexts when implementing them.

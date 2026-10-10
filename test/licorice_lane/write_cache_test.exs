@@ -48,6 +48,15 @@ defmodule LicoriceLane.WriteCacheTest do
     assert_invalidated([:messages, :new_messages_count])
   end
 
+  test "stale customer updates preserve cached values" do
+    customer = customer_fixture()
+    assert {:ok, _} = Customers.delete_customer(customer)
+    warm([:customers, :dashboard_stats])
+    assert {:error, _} = Customers.update_customer(customer, %{name: "Stale edit"})
+    assert Cache.get(:customers) == :cached
+    assert Cache.get(:dashboard_stats) == :cached
+  end
+
   test "failed message writes preserve cached values" do
     message = message_fixture()
     warm([:messages, :new_messages_count])

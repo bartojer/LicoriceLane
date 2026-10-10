@@ -147,13 +147,21 @@ defmodule LicoriceLane.Customers do
   end
 
   @doc """
-  Updates a customer.
+  Returns a changeset for validating customer edits without persisting them.
+  """
+  def change_customer(%Customer{} = customer, attrs \\ %{}) do
+    Customer.changeset(customer, attrs)
+  end
+
+  @doc """
+  Updates a customer and invalidates dependent cache entries after success.
+  Returns an error changeset if validation fails or the record was deleted.
   """
   def update_customer(%Customer{} = customer, attrs) do
     result =
       customer
       |> Customer.changeset(attrs)
-      |> Repo.update()
+      |> Repo.update(stale_error_field: :id, stale_error_message: "is no longer available")
 
     case result do
       {:ok, updated} ->

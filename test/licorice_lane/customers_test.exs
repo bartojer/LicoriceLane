@@ -202,6 +202,85 @@ defmodule LicoriceLane.CustomersTest do
   end
 
   describe "update_customer/2" do
+    test "replaces email and phone lookup hashes after editing" do
+      customer = customer_fixture(%{email: "before@example.com", phone: "555-1111"})
+
+      assert {:ok, updated} =
+               Customers.update_customer(customer, %{
+                 email: "after@example.com",
+                 phone: "555-2222"
+               })
+
+      assert Customers.find_customer_by_email("before@example.com") == []
+      assert Customers.find_customer_by_phone("555-1111") == []
+      assert [found] = Customers.find_customer_by_email("after@example.com")
+      assert found.id == updated.id
+      assert [found] = Customers.find_customer_by_phone("555-2222")
+      assert found.id == updated.id
+    end
+
+    test "clearing optional contact fields clears their stored values and lookup hashes" do
+      customer = customer_fixture(%{email: "clear@example.com", phone: "555-3333"})
+      assert {:ok, _} = Customers.update_customer(customer, %{email: "", phone: ""})
+      assert Customers.find_customer_by_email("clear@example.com") == []
+      assert Customers.find_customer_by_phone("555-3333") == []
+
+      assert %{rows: [[nil, nil, nil, nil]]} =
+               Ecto.Adapters.SQL.query!(
+                 Repo,
+                 "SELECT email, phone, email_hash, phone_hash FROM customers WHERE id = $1",
+                 [customer.id]
+               )
+    end
+
+    test "clearing one contact field preserves the other lookup and unrelated encrypted fields" do
+      customer = customer_fixture(%{email: "keep@example.com", phone: "555-4444"})
+      assert {:ok, _} = Customers.update_customer(customer, %{phone: nil, name: "Renamed"})
+      assert [found] = Customers.find_customer_by_email("keep@example.com")
+      assert found.id == customer.id
+      assert found.phone == nil
+      assert found.contact_person == customer.contact_person
+      assert found.billing_address == customer.billing_address
+      assert found.notes == customer.notes
+      assert Customers.find_customer_by_phone("555-4444") == []
+    end
+
+    test "edited sensitive fields remain encrypted in raw database storage" do
+      customer = customer_fixture()
+
+      attrs = %{
+        email: "encrypted-edit@example.com",
+        phone: "555-5555",
+        contact_person: "Synthetic contact",
+        billing_address: "Synthetic address",
+        notes: "Synthetic internal notes"
+      }
+
+      assert {:ok, _} = Customers.update_customer(customer, attrs)
+
+      %{rows: [stored]} =
+        Ecto.Adapters.SQL.query!(
+          Repo,
+          "SELECT email, phone, contact_person, billing_address, notes FROM customers WHERE id = $1",
+          [customer.id]
+        )
+
+      plaintext =
+        Enum.map([:email, :phone, :contact_person, :billing_address, :notes], &attrs[&1])
+
+      assert Enum.all?(Enum.zip(stored, plaintext), fn {ciphertext, value} ->
+               is_binary(ciphertext) and ciphertext != value
+             end)
+    end
+
+    test "returns an error changeset when an edited customer was deleted" do
+      customer = customer_fixture()
+      Customers.delete_customer(customer)
+      assert {:error, changeset} = Customers.update_customer(customer, %{name: "Stale edit"})
+      assert "is no longer available" in errors_on(changeset).id
+      assert Customers.get_customer(customer.id) == nil
+    end
+
     test "updates customer with valid data" do
       customer = customer_fixture()
       update_attrs = %{name: "Updated Name", notes: "Updated notes"}
@@ -221,6 +300,17 @@ defmodule LicoriceLane.CustomersTest do
       assert customer.id == reloaded.id
       assert customer.name == reloaded.name
       assert customer.email == reloaded.email
+    end
+  end
+
+  describe "change_customer/2" do
+    test "validates edits without writing to the database" do
+      customer = customer_fixture()
+      changeset = Customers.change_customer(customer, %{name: "Draft name"})
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :name) == "Draft name"
+      assert Customers.get_customer!(customer.id).name == customer.name
+      refute Customers.change_customer(customer, %{name: ""}).valid?
     end
   end
 
