@@ -93,6 +93,8 @@ Use [existing fixtures](test/support/fixtures) for test data rather than running
 
 ### Running tests from Windows through WSL
 
+For required full-suite validation, configure the Mix and browser runtime below and run `bash scripts/test-all.sh` from WSL. It checks browser prerequisites, runs the two browser smoke regressions in separate processes, then runs every non-browser ExUnit test. See [testing](docs/TESTING.md) for logs, artifacts and seed overrides.
+
 If the Windows terminal has no Elixir tools, use an Ubuntu WSL shell with PostgreSQL running. With the pinned asdf runtimes installed, change to this repository in WSL and select the compatible tools. The following keeps Mix tools and build outputs in ignored project directories, avoiding an older global Hex archive:
 
 ```bash

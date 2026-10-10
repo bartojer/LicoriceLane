@@ -234,6 +234,9 @@ defmodule LicoriceLaneWeb.InventoryUploadTest do
     assert updated.single_item.condition == "Excellent"
     assert updated.image_path != item.image_path
     assert_stored(conn, updated, directory)
+    # Replaced paths can be shared; saving a replacement must retain the old file.
+    assert File.read!(Path.join(directory, Path.basename(item.image_path))) == @png
+    assert length(File.ls!(directory)) == 2
   end
 
   test "failed edit of single details rolls back its image and allows retry", context do
@@ -265,7 +268,10 @@ defmodule LicoriceLaneWeb.InventoryUploadTest do
     |> form("#edit-item-form", item: %{"name" => "Edited", "condition" => "Excellent"})
     |> render_submit()
 
-    assert_stored(conn, Inventory.get_item!(item.id), directory)
+    updated = Inventory.get_item!(item.id)
+    assert updated.name == "Edited"
+    assert updated.single_item.condition == "Excellent"
+    assert_stored(conn, updated, directory)
   end
 
   test "editing without an upload preserves the existing image", %{conn: conn} do

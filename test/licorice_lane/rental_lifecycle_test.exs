@@ -24,22 +24,25 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert {:error, _} = Rentals.check_rental_availability(request)
   end
 
-  setup do
+  setup tags do
     Cache.clear()
     on_exit(fn -> Cache.clear() end)
     customer = customer_fixture()
     source = warehouse_fixture()
     other = warehouse_fixture()
     bulk = bulk_item_fixture(%{location: source, quantity: 10})
-    single = single_item_fixture(%{location: source})
+    single = if tags[:single], do: single_item_fixture(%{location: source})
     Repo.insert!(%ItemsLocation{item_id: bulk.id, location_id: other.id, quantity: 4})
     %{customer: customer, source: source, other: other, bulk: bulk, single: single}
   end
 
+  @tag :single
   test "booking reserves multi-source summaries without moving stock or trusting lifecycle fields",
        c do
     Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "rentals:updates")
+    Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "inventory:updates")
     Cache.put(:rentals, :stale)
+    Cache.put(:inventory_items, :stale)
 
     attrs =
       attrs(c, [row(c.bulk, c.source, 6), row(c.bulk, c.other, 3), row(c.single, c.source, 1)])
@@ -58,6 +61,11 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert_receive {:rental_updated, id}
     assert id == r.id
     assert Cache.get(:rentals) == nil
+    assert Cache.get(:inventory_items) == nil
+    bulk_id = c.bulk.id
+    single_id = c.single.id
+    assert_receive {:inventory_updated, ^bulk_id}
+    assert_receive {:inventory_updated, ^single_id}
   end
 
   test "peak demand permits disjoint overlaps and adjacent boundaries, rejecting overbooking",
@@ -77,6 +85,7 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert stock(c.bulk, c.source) == 10
   end
 
+  @tag :single
   test "mixed checkout and partial returns conserve stock and retain booked summary quantities",
        c do
     r = book!(c, [row(c.bulk, c.source, 6), row(c.bulk, c.other, 3), row(c.single, c.source, 1)])
@@ -103,6 +112,7 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert stock(c.bulk, c.source) == 6
     assert stock(c.bulk, %{id: out.destination_location_id}) == 7
     assert Repo.get!(SingleItem, c.single.id).status == :available
+    assert Repo.get!(SingleItem, c.single.id).location_id == c.source.id
     remaining = Enum.filter(partial.allocations, &(&1.quantity > &1.returned_quantity))
 
     assert {:ok, done} =
@@ -114,7 +124,33 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert stock(c.bulk, c.source) == 10 and stock(c.bulk, c.other) == 4
     assert stock(c.bulk, %{id: out.destination_location_id}) == 0
     assert Repo.aggregate(LocationHistory, :count) == 7
+    assert Enum.all?(done.allocations, &(&1.returned_quantity == &1.quantity))
+
+    history =
+      Repo.all(
+        from h in LocationHistory,
+          where: h.rental_id == ^r.id,
+          select: {h.item_id, h.quantity, h.from_location_id, h.to_location_id}
+      )
+
+    assert Enum.sort(history) ==
+             Enum.sort([
+               {c.bulk.id, 6, c.source.id, out.destination_location_id},
+               {c.bulk.id, 3, c.other.id, out.destination_location_id},
+               {c.single.id, 1, c.source.id, out.destination_location_id},
+               {c.bulk.id, 2, out.destination_location_id, c.source.id},
+               {c.single.id, 1, out.destination_location_id, c.source.id},
+               {c.bulk.id, 4, out.destination_location_id, c.source.id},
+               {c.bulk.id, 3, out.destination_location_id, c.other.id}
+             ])
+
     assert {:error, _} = Rentals.return_rental(done, %{returns: [return_row(a, 1)]})
+
+    assert {:error, _} =
+             Rentals.update_rental_details(done, %{return_by: DateTime.add(done.return_by, 60)})
+
+    assert {:ok, corrected} = Rentals.update_rental_details(done, %{event_type: :birthday})
+    assert corrected.returned_at == done.returned_at and corrected.return_by == done.return_by
   end
 
   test "replays, stale forms, foreign allocations and excessive returns cannot move stock", c do
@@ -123,6 +159,11 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert {:error, stale} = Rentals.checkout_rental(r)
     assert errors_on(stale).id != []
     a = hd(out.allocations)
+    other = book!(c, [row(c.bulk, c.other, 1)])
+
+    assert {:error, _} =
+             Rentals.return_rental(out, %{returns: [return_row(hd(other.allocations), 1)]})
+
     assert {:error, _} = Rentals.return_rental(out, %{returns: [return_row(a, 6)]})
 
     assert {:error, _} =
@@ -130,6 +171,13 @@ defmodule LicoriceLane.RentalLifecycleTest do
 
     assert {:error, _} =
              Rentals.return_rental(out, %{returns: [%{allocation_id: a.id + 1000, quantity: 1}]})
+
+    for quantity <- [0, "", -1, "1oops", %{}] do
+      assert {:error, _} = Rentals.return_rental(out, %{returns: [return_row(a, quantity)]})
+    end
+
+    assert stock(c.bulk, c.source) == 5
+    assert hd(Rentals.get_rental(out.id).allocations).returned_quantity == 0
 
     {:ok, partial} = Rentals.return_rental(out, %{returns: [return_row(a, 1)]})
     assert {:error, _} = Rentals.return_rental(out, %{returns: [return_row(a, 1)]})
@@ -139,6 +187,7 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert {:error, _} = Rentals.cancel_rental(partial)
   end
 
+  @tag :single
   test "physical preflight failure does not move stock, broadcast or invalidate",
        c do
     r = book!(c, [row(c.bulk, c.source, 5), row(c.single, c.source, 1)])
@@ -148,13 +197,18 @@ defmodule LicoriceLane.RentalLifecycleTest do
     |> Repo.update!()
 
     Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "rentals:updates")
-    Cache.put(:rentals, :retained)
+    Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "inventory:updates")
+    for key <- [:rentals, :inventory_items, :dashboard_stats], do: Cache.put(key, :retained)
     assert {:error, _} = Rentals.checkout_rental(r)
     assert stock(c.bulk, c.source) == 10
     assert Repo.aggregate(LocationHistory, :count) == 0
     assert Rentals.get_rental(r.id).status == :reserved
-    assert Cache.get(:rentals) == :retained
+
+    for key <- [:rentals, :inventory_items, :dashboard_stats],
+        do: assert(Cache.get(key) == :retained)
+
     refute_receive {:rental_updated, _}
+    refute_received {:inventory_updated, _}
   end
 
   test "checkout failure after an earlier bulk movement rolls back every stock row", c do
@@ -175,6 +229,7 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert Rentals.get_rental(r.id).lifecycle_version == 0
   end
 
+  @tag :single
   test "a return failure after an earlier movement rolls everything back", c do
     r = book!(c, [row(c.bulk, c.source, 5), row(c.single, c.source, 1)])
     {:ok, out} = Rentals.checkout_rental(r)
@@ -195,6 +250,14 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert {:error, _} = Rentals.create_rental(attrs(c, [row(c.bulk, c.source, 1)]))
     assert {:ok, cancelled} = Rentals.cancel_rental(r)
     assert cancelled.status == :cancelled and length(cancelled.allocations) == 1
+
+    assert {:error, _} =
+             Rentals.update_rental_details(cancelled, %{
+               rented_at: DateTime.add(cancelled.rented_at, -60)
+             })
+
+    assert {:ok, corrected} = Rentals.update_rental_details(cancelled, %{event_type: :corporate})
+    assert corrected.status == :cancelled and corrected.rented_at == cancelled.rented_at
     assert {:ok, _} = Rentals.create_rental(attrs(c, [row(c.bulk, c.source, 10)]))
     assert {:error, _} = Rentals.cancel_rental(r)
     assert {:error, _} = Inventory.delete_item(c.bulk)
@@ -275,6 +338,7 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert stock(c.bulk, c.source) == 10
   end
 
+  @tag :single
   test "booking constraints reject malformed inputs, wrong ownership, duplicate sources and single quantities",
        c do
     wrong = customer_location_fixture()
@@ -307,6 +371,7 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert Repo.aggregate(Location, :count) == 3
   end
 
+  @tag :single
   test "stale inventory forms cannot undo checkout status or change type, but condition remains editable",
        c do
     old = c.single
@@ -379,6 +444,7 @@ defmodule LicoriceLane.RentalLifecycleTest do
     assert Repo.aggregate(LocationHistory, :count) == 0
   end
 
+  @tag :single
   test "single reservations cannot overlap and managed query filters omit future cancellations",
        c do
     t = time(3600)

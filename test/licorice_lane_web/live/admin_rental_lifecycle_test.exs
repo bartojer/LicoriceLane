@@ -84,11 +84,24 @@ defmodule LicoriceLaneWeb.AdminRentalLifecycleTest do
 
   test "checkout, retained failed partial return, completion and replay protection", c do
     r = booking(c)
+    other = booking(c)
     view = bookings_view(c.conn)
+
+    for event <- ["checkout_rental", "cancel_booking"] do
+      view |> with_target(target(view)) |> render_click(event, %{"rental-id" => other.id})
+      assert Rentals.get_rental(other.id).status == :reserved
+    end
+
     open(view, r)
-    view |> element("button[phx-click=checkout_rental]") |> render_click()
+
+    view
+    |> element("button[phx-click=checkout_rental]")
+    |> render_click(%{"rental-id" => other.id})
+
     assert has_element?(view, "#booking-notice", "Booking checked out.")
     out = Rentals.get_rental(r.id)
+    assert out.status == :active
+    assert Rentals.get_rental(other.id).status == :reserved
     open(view, out)
     view |> element("button[phx-click=start_return]") |> render_click()
     a = Enum.find(out.allocations, &(&1.source_location_id == c.source.id))
@@ -146,13 +159,19 @@ defmodule LicoriceLaneWeb.AdminRentalLifecycleTest do
   test "another admin checkout makes allocation and schedule drafts stale", c do
     r = booking(c)
     editor = bookings_view(c.conn)
+    scheduler = bookings_view(c.conn)
+    open(scheduler, r)
+    scheduler |> element("#booking-detail-modal button", "Update Booking") |> render_click()
     open(editor, r)
     editor |> element("button[phx-click=edit_allocations]") |> render_click()
     assert {:ok, _} = Rentals.checkout_rental(r)
     render(editor)
     editor |> form("#booking-reservation-form") |> render_submit()
     assert has_element?(editor, "#booking-reservation-error", "has changed")
+    scheduler |> form("#booking-edit-form", rental: %{event_type: "birthday"}) |> render_submit()
+    assert has_element?(scheduler, "#booking-edit-error", "has changed")
     assert Rentals.get_rental(r.id).status == :active
+    assert Rentals.get_rental(r.id).event_type == r.event_type
   end
 
   test "malformed scalar and nested payloads are rejected without crashing", c do

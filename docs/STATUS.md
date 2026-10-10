@@ -4,6 +4,8 @@ Reviewed on October 9, 2026 against the current source. Feature descriptions com
 
 ## Test validation
 
+October 10 [full-suite audit](TEST_AUDIT_2026-10-10.md) retained the two browser smoke cases, strengthened meaningful assertions and consolidated repeated setup without removing unique guards. The required `bash scripts/test-all.sh` command passed both browser cases followed by 365 non-browser tests, with no skips (367 named cases total). Comparable seed-0 diagnostic ExUnit time changed from 11.8 to 9.4 seconds; total test source grew 3.9% to fill coverage gaps. New tests exposed and fixed public single-item detail availability and the missing customer rental-count association. The audit report records guard mappings, measured tradeoffs and remaining gaps.
+
 Validated on October 7, 2026 in Ubuntu WSL with Elixir 1.18.4, Erlang/OTP 28.0.2, and the configured local PostgreSQL test database:
 
 | Run | Result |
@@ -89,7 +91,7 @@ Visible buttons and schemas do not imply these workflows are complete. Keep busi
 
 ## Verification gaps
 
-- **Browser E2E runner:** The agreed default for expanded E2E coverage is official Playwright Test in TypeScript, with reproducible headless commands, isolated fixtures, JSON reports, and failure artifacts for agents. The working upload and deletion regressions currently use Playwright through optional ExUnit-launched scripts. A full runner configuration, pinned project dependencies, reports/traces, and a required browser CI job have not been established. Preserve the existing regressions during migration; see [testing strategy](TESTING.md).
+- **Browser E2E runner:** Keep a compact smoke suite and detailed scenarios in ExUnit/LiveView tests. Upload/deletion remain two ExUnit-launched Playwright cases with a shared harness, JSON results and failure screenshots/traces; `scripts/test-all.sh` rejects missing browser prerequisites and runs the complete required suite. Official TypeScript runner configuration, pinned project dependencies and a required browser CI job remain unimplemented. Preserve existing sandbox isolation/guards during migration; see [testing strategy](TESTING.md).
 - **Remaining realtime events:** Message deletion has no broadcast or admin UI; account/customer realtime events are not currently defined. Inventory/message create/update and managed rental lifecycle/schedule refresh behavior is implemented.
 - **Cache integration:** Cachex starts with a five-minute TTL and write invalidation is present. Query paths currently do not call the cache fetch/get/put helpers, so caching benefits are not established. Add caching and dependency-aware invalidation together if needed.
 - **Test coverage:** Inventory lifecycle tests cover atomic single/bulk creation and single-detail edits, rollback, stock defaults, single-item updates, single/bulk deletion and reference protection, warehouse totals, cache invalidation, and broadcasts. Admin tests cover registration privilege protection, admin plugs/mount hooks, route access, dashboard mounting, revoked privileges, inventory upload workflows, and server-side deletion confirmation/cancellation. Dedicated pagination/context/cache tests and admin/public inventory web tests now cover filtered totals, stable page boundaries, invalid/out-of-range inputs, list shrinkage, component refresh/filter preservation, and public stream updates. Deletion dialog JavaScript now has focused browser coverage; other detailed admin workflows still need coverage. Do not use seeds as test setup.

@@ -29,9 +29,9 @@ defmodule LicoriceLane.WriteCacheTest do
     customer = customer_fixture()
     warm([:customers, :dashboard_stats])
     assert {:error, _} = Customers.create_customer(%{name: nil})
+    assert_preserved([:customers, :dashboard_stats])
     assert {:error, _} = Customers.update_customer(customer, %{name: nil})
-    assert Cache.get(:customers) == :cached
-    assert Cache.get(:dashboard_stats) == :cached
+    assert_preserved([:customers, :dashboard_stats])
   end
 
   test "message create, status update and delete invalidate dependent cache entries" do
@@ -44,6 +44,10 @@ defmodule LicoriceLane.WriteCacheTest do
     assert_invalidated([:messages, :new_messages_count])
 
     warm([:messages, :new_messages_count])
+    assert {:ok, updated} = Messages.update_message_status(updated, %{admin_notes: "Notes only"})
+    assert_invalidated([:messages, :new_messages_count])
+
+    warm([:messages, :new_messages_count])
     assert {:ok, _} = Messages.delete_message(updated)
     assert_invalidated([:messages, :new_messages_count])
   end
@@ -53,17 +57,16 @@ defmodule LicoriceLane.WriteCacheTest do
     assert {:ok, _} = Customers.delete_customer(customer)
     warm([:customers, :dashboard_stats])
     assert {:error, _} = Customers.update_customer(customer, %{name: "Stale edit"})
-    assert Cache.get(:customers) == :cached
-    assert Cache.get(:dashboard_stats) == :cached
+    assert_preserved([:customers, :dashboard_stats])
   end
 
   test "failed message writes preserve cached values" do
     message = message_fixture()
     warm([:messages, :new_messages_count])
     assert {:error, _} = Messages.create_message(%{name: nil})
+    assert_preserved([:messages, :new_messages_count])
     assert {:error, _} = Messages.update_message_status(message, %{status: :invalid})
-    assert Cache.get(:messages) == :cached
-    assert Cache.get(:new_messages_count) == :cached
+    assert_preserved([:messages, :new_messages_count])
   end
 
   defp warm(keys) do
@@ -73,6 +76,11 @@ defmodule LicoriceLane.WriteCacheTest do
 
   defp assert_invalidated(keys) do
     Enum.each(keys, &assert(is_nil(Cache.get(&1))))
+    assert Cache.get(:unrelated) == :preserved
+  end
+
+  defp assert_preserved(keys) do
+    Enum.each(keys, &assert(Cache.get(&1) == :cached))
     assert Cache.get(:unrelated) == :preserved
   end
 end

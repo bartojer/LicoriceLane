@@ -197,6 +197,29 @@ defmodule LicoriceLane.InventoryLifecycleTest do
     end
   end
 
+  test "both update APIs reject deleted items without recreating data or emitting updates", %{
+    warehouse: warehouse
+  } do
+    for item <- [
+          single_item_fixture(%{location: warehouse}),
+          bulk_item_fixture(%{location: warehouse})
+        ] do
+      assert {:ok, _} = Inventory.delete_item(item)
+      assert_inventory_updated(item.id)
+      for key <- @inventory_cache_keys, do: Cache.put(key, :stale)
+
+      for update <- [&Inventory.update_item/2, &Inventory.update_item_with_details/2] do
+        assert {:error, changeset} = update.(item, %{name: "Stale edit"})
+        assert "is no longer available" in errors_on(changeset).id
+        assert Repo.get(Item, item.id) == nil
+        assert Repo.get(SingleItem, item.id) == nil
+        refute Repo.get_by(ItemsLocation, item_id: item.id)
+      end
+
+      assert_inventory_unchanged()
+    end
+  end
+
   describe "delete_item/1" do
     test "deletes an unbooked single item and its tracking row", %{warehouse: warehouse} do
       item = single_item_fixture(%{location: warehouse})
@@ -232,36 +255,36 @@ defmodule LicoriceLane.InventoryLifecycleTest do
       assert_inventory_updated(item.id)
     end
 
-    test "rejects single items in bookings regardless of status and preserves tracking", %{
-      warehouse: warehouse
-    } do
-      for status <- [:active, :late, :returned, :cancelled] do
-        item = single_item_fixture(%{location: warehouse})
-        rental = rental_with_single_items_fixture(%{single_item: item, status: status})
+    test "rejects single and bulk booking references in every status, preserving tracking and stock",
+         %{
+           warehouse: warehouse
+         } do
+      for type <- [:single, :bulk],
+          status <- [:reserved, :active, :late, :returned, :cancelled] do
+        {item, reference} =
+          case type do
+            :single ->
+              item = single_item_fixture(%{location: warehouse})
+              rental = rental_with_single_items_fixture(%{single_item: item, status: status})
+              {item, hd(rental.rental_single_items)}
+
+            :bulk ->
+              item = bulk_item_fixture(%{location: warehouse})
+              rental = rental_with_bulk_items_fixture(%{bulk_item: item, status: status})
+              {item, hd(rental.rental_bulk_items)}
+          end
+
         # Customer fixtures invalidate dashboard data; measure only deletion side effects.
         for key <- @inventory_cache_keys, do: Cache.put(key, :stale)
-
         assert {:error, changeset} = Inventory.delete_item(item)
         assert "is used in a booking" in errors_on(changeset).id
         assert Repo.get!(Item, item.id)
-        assert Repo.get!(SingleItem, item.id)
+        assert Repo.get!(reference.__struct__, reference.id)
 
-        assert Repo.get!(LicoriceLane.Rentals.RentalSingleItem, hd(rental.rental_single_items).id)
-        assert_inventory_unchanged()
-      end
-    end
+        if type == :single,
+          do: assert(Repo.get!(SingleItem, item.id)),
+          else: assert([%{quantity: 50}] = Inventory.get_warehouse_quantities(item.id))
 
-    test "rejects bulk items in bookings and rolls back stock deletion", %{warehouse: warehouse} do
-      for status <- [:active, :late, :returned, :cancelled] do
-        item = bulk_item_fixture(%{location: warehouse})
-        rental = rental_with_bulk_items_fixture(%{bulk_item: item, status: status})
-        for key <- @inventory_cache_keys, do: Cache.put(key, :stale)
-
-        assert {:error, changeset} = Inventory.delete_item(item)
-        assert "is used in a booking" in errors_on(changeset).id
-        assert Repo.get!(Item, item.id)
-        assert [%{quantity: 50}] = Inventory.get_warehouse_quantities(item.id)
-        assert Repo.get!(LicoriceLane.Rentals.RentalBulkItem, hd(rental.rental_bulk_items).id)
         assert_inventory_unchanged()
       end
     end

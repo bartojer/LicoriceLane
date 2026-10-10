@@ -1,5 +1,5 @@
 defmodule LicoriceLaneWeb.ErrorJSONTest do
-  use LicoriceLaneWeb.ConnCase, async: true
+  use ExUnit.Case, async: true
 
   test "renders 404" do
     assert LicoriceLaneWeb.ErrorJSON.render("404.json", %{}) == %{errors: %{detail: "Not Found"}}

@@ -66,6 +66,14 @@ defmodule LicoriceLaneWeb.UserResetPasswordLiveTest do
       refute get_session(conn, :user_token)
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Password reset successfully"
       assert Accounts.get_user_by_email_and_password(user.email, "new valid password")
+      refute Accounts.get_user_by_email_and_password(user.email, valid_user_password())
+      refute Accounts.get_user_by_reset_password_token(token)
+
+      assert {:error, {:redirect, redirect}} =
+               live(build_conn(), ~p"/users/reset_password/#{token}")
+
+      assert redirect.to == ~p"/"
+      assert redirect.flash["error"] == "Reset password link is invalid or it has expired."
     end
 
     test "does not reset password on invalid data", %{conn: conn, token: token} do

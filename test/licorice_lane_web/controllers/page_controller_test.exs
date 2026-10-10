@@ -1,5 +1,5 @@
 defmodule LicoriceLaneWeb.PageControllerTest do
-  use LicoriceLaneWeb.ConnCase
+  use LicoriceLaneWeb.ConnCase, async: true
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")

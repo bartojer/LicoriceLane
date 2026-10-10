@@ -84,14 +84,21 @@ defmodule LicoriceLaneWeb.UserSessionControllerTest do
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Password updated successfully"
     end
 
-    test "redirects to login page with invalid credentials", %{conn: conn} do
-      conn =
-        post(conn, ~p"/users/log_in", %{
-          "user" => %{"email" => "invalid@email.com", "password" => "invalid_password"}
-        })
+    test "rejects unknown emails and wrong passwords without disclosing account existence", %{
+      conn: conn,
+      user: user
+    } do
+      for email <- ["invalid@email.com", user.email] do
+        failed =
+          post(conn, ~p"/users/log_in", %{
+            "user" => %{"email" => email, "password" => "invalid_password"}
+          })
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Invalid email or password"
-      assert redirected_to(conn) == ~p"/users/log_in"
+        assert Phoenix.Flash.get(failed.assigns.flash, :error) == "Invalid email or password"
+        assert redirected_to(failed) == ~p"/users/log_in"
+        refute get_session(failed, :user_token)
+        refute failed.resp_cookies["_licorice_lane_web_user_remember_me"]
+      end
     end
   end
 

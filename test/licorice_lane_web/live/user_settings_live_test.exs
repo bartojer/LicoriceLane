@@ -46,7 +46,16 @@ defmodule LicoriceLaneWeb.UserSettingsLiveTest do
         |> render_submit()
 
       assert result =~ "A link to confirm your email"
-      assert Accounts.get_user_by_email(user.email)
+      assert Accounts.get_user_by_email(user.email).id == user.id
+      refute Accounts.get_user_by_email(new_email)
+
+      assert token =
+               LicoriceLane.Repo.get_by(Accounts.UserToken,
+                 user_id: user.id,
+                 context: "change:#{user.email}"
+               )
+
+      assert token.sent_to == new_email
     end
 
     test "renders errors with invalid data (phx-change)", %{conn: conn} do
@@ -90,7 +99,7 @@ defmodule LicoriceLaneWeb.UserSettingsLiveTest do
     end
 
     test "updates the user password", %{conn: conn, user: user, password: password} do
-      new_password = valid_user_password()
+      new_password = "a different valid password"
 
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
@@ -116,6 +125,11 @@ defmodule LicoriceLaneWeb.UserSettingsLiveTest do
                "Password updated successfully"
 
       assert Accounts.get_user_by_email_and_password(user.email, new_password)
+      refute Accounts.get_user_by_email_and_password(user.email, password)
+      refute Accounts.get_user_by_session_token(get_session(conn, :user_token))
+
+      assert Accounts.get_user_by_session_token(get_session(new_password_conn, :user_token)).id ==
+               user.id
     end
 
     test "renders errors with invalid data (phx-change)", %{conn: conn} do

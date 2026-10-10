@@ -26,18 +26,18 @@ defmodule LicoriceLane.RentalConcurrencyTest do
           allocations: [%{item_id: item.id, source_location_id: source.id, quantity: 5}]
         }
 
-        results = race(fn -> Rentals.create_rental(attrs) end)
+        results = race(Item, item.id, fn -> Rentals.create_rental(attrs) end)
         assert Enum.count(results, &match?({:ok, _}, &1)) == 1
         assert Enum.count(results, &match?({:error, _}, &1)) == 1
         {:ok, rental} = Enum.find(results, &match?({:ok, _}, &1))
-        checkouts = race(fn -> Rentals.checkout_rental(rental) end)
+        checkouts = race(Rental, rental.id, fn -> Rentals.checkout_rental(rental) end)
         assert Enum.count(checkouts, &match?({:ok, _}, &1)) == 1
         assert Enum.count(checkouts, &match?({:error, _}, &1)) == 1
         {:ok, out} = Enum.find(checkouts, &match?({:ok, _}, &1))
         allocation = hd(out.allocations)
 
         returns =
-          race(fn ->
+          race(Rental, rental.id, fn ->
             Rentals.return_rental(out, %{returns: [%{allocation_id: allocation.id, quantity: 2}]})
           end)
 
@@ -74,26 +74,70 @@ defmodule LicoriceLane.RentalConcurrencyTest do
     end)
   end
 
-  defp race(operation) do
+  defp race(schema, id, operation) do
     parent = self()
 
     tasks =
-      for _ <- 1..2 do
-        Task.async(fn ->
-          Sandbox.unboxed_run(Repo, fn ->
-            send(parent, {:ready, self()})
+      for _ <- 1..2,
+          do:
+            Task.async(fn ->
+              Sandbox.unboxed_run(Repo, fn ->
+                [[backend]] = Repo.query!("SELECT pg_backend_pid()").rows
+                send(parent, {:ready, self(), backend})
 
-            receive do
-              :go -> operation.()
-            after
-              5_000 -> raise "race barrier timed out"
-            end
-          end)
-        end)
-      end
+                receive do
+                  :go -> operation.()
+                after
+                  5_000 -> raise "race barrier timed out"
+                end
+              end)
+            end)
 
-    for _ <- tasks, do: assert_receive({:ready, _}, 5_000)
-    Enum.each(tasks, &send(&1.pid, :go))
-    Enum.map(tasks, &Task.await(&1, 10_000))
+    try do
+      assert {:ok, :contended} =
+               Repo.transaction(fn ->
+                 Repo.one!(from row in schema, where: row.id == ^id, lock: "FOR UPDATE")
+
+                 backends =
+                   for task <- tasks do
+                     pid = task.pid
+                     assert_receive {:ready, ^pid, backend}, 5_000
+                     backend
+                   end
+
+                 assert length(Enum.uniq(backends)) == 2
+                 Enum.each(tasks, &send(&1.pid, :go))
+                 # Starting together alone can still execute sequentially. Prove both
+                 # connections are waiting on the held row before allowing either write.
+                 assert wait_for_contention(backends, System.monotonic_time(:millisecond) + 5_000)
+                 :contended
+               end)
+
+      Enum.map(tasks, &Task.await(&1, 10_000))
+    after
+      Enum.each(tasks, fn task ->
+        if Process.alive?(task.pid), do: Task.shutdown(task, :brutal_kill)
+      end)
+    end
+  end
+
+  defp wait_for_contention(backends, deadline) do
+    [[waiting]] =
+      Repo.query!(
+        "SELECT COUNT(DISTINCT pid) FROM pg_locks WHERE pid = ANY($1::int[]) AND NOT granted",
+        [backends]
+      ).rows
+
+    cond do
+      waiting == length(backends) ->
+        true
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        false
+
+      true ->
+        Process.sleep(10)
+        wait_for_contention(backends, deadline)
+    end
   end
 end

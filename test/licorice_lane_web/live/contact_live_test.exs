@@ -3,178 +3,105 @@ defmodule LicoriceLaneWeb.ContactLiveTest do
 
   import Phoenix.LiveViewTest
   import LicoriceLane.MessagesFixtures
+  alias LicoriceLane.Messages
 
-  describe "Contact page" do
-    test "renders contact form", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/contact")
+  test "renders the contact form and other contact information", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/contact")
 
-      assert html =~ "Contact Us"
-      assert html =~ "Send us a message"
-      assert has_element?(view, "form#contact_form")
-      assert has_element?(view, "input[name='message[name]']")
-      assert has_element?(view, "input[name='message[email]']")
-      assert has_element?(view, "textarea[name='message[message]']")
+    for text <- [
+          "Contact Us",
+          "Send us a message",
+          "Other Ways to Reach Us",
+          "Phone:",
+          "Email:",
+          "Address:"
+        ] do
+      assert html =~ text
     end
 
-    test "displays contact information", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/contact")
+    assert has_element?(view, "form#contact_form")
 
-      assert html =~ "Other Ways to Reach Us"
-      assert html =~ "Phone:"
-      assert html =~ "Email:"
-      assert html =~ "Address:"
+    for field <- [:name, :email, :phone] do
+      assert has_element?(view, "input[name='message[#{field}]']")
     end
+
+    assert has_element?(view, "textarea[name='message[message]']")
   end
 
-  describe "Form validation" do
-    test "validates required fields on change", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/contact")
+  test "change validation displays field errors without saving", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/contact")
+    view |> form("#contact_form", message: %{name: "", email: "", message: ""}) |> render_change()
 
-      # Submit empty form to trigger validation
-      view
-      |> form("#contact_form", message: %{})
-      |> render_change()
-
-      assert has_element?(view, "#contact_form")
+    for field <- [:name, :email, :message] do
+      assert has_element?(view, "#message_#{field} ~ p", "can't be blank")
     end
 
-    test "validates email format", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/contact")
+    view
+    |> form("#contact_form",
+      message: %{name: "Test User", email: "invalid-email", message: "Test message"}
+    )
+    |> render_change()
 
-      view
-      |> form("#contact_form",
-        message: %{
-          name: "Test User",
-          email: "invalid-email",
-          message: "Test message"
-        }
-      )
-      |> render_change()
-
-      # Form should still be present with error
-      assert has_element?(view, "#contact_form")
-    end
+    assert has_element?(view, "#message_email ~ p", "has invalid format")
+    refute has_element?(view, "#message_name ~ p")
+    refute has_element?(view, "#message_message ~ p")
+    assert Messages.list_messages() == []
   end
 
-  describe "Form submission" do
-    test "creates message with valid data", %{conn: conn} do
+  for phone <- [nil, "555-1234"] do
+    @phone phone
+    test "successful submission with phone #{inspect(phone)} persists data, flashes and clears every field",
+         %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/contact")
+      attrs = valid_message_attributes(%{phone: @phone})
+      form_attrs = if @phone, do: attrs, else: Map.delete(attrs, :phone)
 
-      attrs = %{
-        name: "John Doe",
-        email: "john@example.com",
-        message: "I would like to rent some items for my event."
-      }
-
-      view
-      |> form("#contact_form", message: attrs)
-      |> render_submit()
-
-      # Should show success message
+      result = view |> form("#contact_form", message: form_attrs) |> render_submit()
       assert_redirected(view, ~p"/contact")
-
-      # Verify message was created
-      messages = LicoriceLane.Messages.list_messages()
-      assert length(messages) == 1
-
-      message = hd(messages)
-      assert message.name == attrs.name
-      assert message.email == attrs.email
-      assert message.message == attrs.message
+      assert [message] = Messages.list_messages()
+      assert Map.take(message, [:name, :email, :phone, :message]) == attrs
       assert message.status == :new
-    end
 
-    test "shows error message with invalid data", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/contact")
+      {:ok, new_view, html} = follow_redirect(result, conn, ~p"/contact")
+      assert html =~ "Thank you for your message"
+      assert has_element?(new_view, "form#contact_form")
 
-      # Submit without required name field
-      view
-      |> form("#contact_form",
-        message: %{
-          email: "test@example.com",
-          message: "Test message"
-        }
-      )
-      |> render_submit()
+      for field <- [:name, :email, :phone, :honeypot] do
+        assert has_element?(new_view, "input#message_#{field}")
+        refute has_element?(new_view, "#message_#{field}[value]:not([value=''])")
+      end
 
-      # Should show error and stay on page
-      assert has_element?(view, "#contact_form")
-      assert render(view) =~ "Oops, something went wrong"
-    end
-
-    test "includes optional phone field", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/contact")
-
-      attrs = %{
-        name: "Jane Doe",
-        email: "jane@example.com",
-        phone: "555-1234",
-        message: "Please call me about my event."
-      }
-
-      view
-      |> form("#contact_form", message: attrs)
-      |> render_submit()
-
-      # Verify message was created with phone
-      messages = LicoriceLane.Messages.list_messages()
-      message = hd(messages)
-      assert message.phone == attrs.phone
-    end
-
-    test "handles honeypot spam detection", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/contact")
-
-      # Fill honeypot field (indicates spam)
-      attrs = %{
-        name: "Spammer",
-        email: "spam@example.com",
-        message: "Spam message",
-        honeypot: "spam content"
-      }
-
-      view
-      |> form("#contact_form", message: attrs)
-      |> render_submit()
-
-      # Should show success message but not create record
-      assert_redirected(view, ~p"/contact")
-
-      # No message should be created
-      messages = LicoriceLane.Messages.list_messages()
-      assert length(messages) == 0
+      assert new_view
+             |> render()
+             |> Floki.parse_document!()
+             |> Floki.find("#message_message")
+             |> Floki.text() == ""
     end
   end
 
-  describe "Success feedback" do
-    test "displays flash message on successful submission", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/contact")
+  test "invalid submission shows specific errors, retains entered values and never persists", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, ~p"/contact")
 
-      attrs = valid_message_attributes()
+    view
+    |> form("#contact_form", message: %{email: "test@example.com", message: "Test message"})
+    |> render_submit()
 
-      html =
-        view
-        |> form("#contact_form", message: attrs)
-        |> render_submit()
-        |> follow_redirect(conn, ~p"/contact")
-        |> elem(2)
+    assert has_element?(view, "#contact_form", "Oops, something went wrong")
+    assert has_element?(view, "#message_name ~ p", "can't be blank")
+    assert has_element?(view, "#message_email[value='test@example.com']")
+    assert has_element?(view, "#message_message", "Test message")
+    assert Messages.list_messages() == []
+  end
 
-      assert html =~ "Thank you for your message"
-    end
-
-    test "clears form after successful submission", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/contact")
-
-      attrs = valid_message_attributes()
-
-      {:ok, new_view, _html} =
-        view
-        |> form("#contact_form", message: attrs)
-        |> render_submit()
-        |> follow_redirect(conn, ~p"/contact")
-
-      # Form should be rendered but empty (default changeset)
-      assert render(new_view) =~ "contact_form"
-    end
+  test "honeypot submissions give ordinary success feedback without persistence", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/contact")
+    attrs = valid_message_attributes(%{honeypot: "Synthetic spam"})
+    result = view |> form("#contact_form", message: attrs) |> render_submit()
+    assert_redirected(view, ~p"/contact")
+    {:ok, _new_view, html} = follow_redirect(result, conn, ~p"/contact")
+    assert html =~ "Thank you for your message"
+    assert Messages.list_messages() == []
   end
 end

@@ -1,5 +1,5 @@
 defmodule LicoriceLane.AccountsTest do
-  use LicoriceLane.DataCase
+  use LicoriceLane.DataCase, async: true
 
   alias LicoriceLane.Accounts
 
@@ -50,9 +50,13 @@ defmodule LicoriceLane.AccountsTest do
 
   describe "register_user/1" do
     test "does not grant admin access through registration attributes" do
-      assert {:ok, user} = Accounts.register_user(valid_user_attributes(%{admin: true}))
-      refute user.admin
-      refute Accounts.get_user!(user.id).admin
+      string_attrs = Map.new(valid_user_attributes(), fn {k, v} -> {Atom.to_string(k), v} end)
+
+      for attrs <- [valid_user_attributes(%{admin: true}), Map.put(string_attrs, "admin", true)] do
+        assert {:ok, user} = Accounts.register_user(attrs)
+        refute user.admin
+        refute Accounts.get_user!(user.id).admin
+      end
     end
 
     test "requires email and password to be set" do
@@ -213,6 +217,7 @@ defmodule LicoriceLane.AccountsTest do
     end
 
     test "updates the email with a valid token", %{user: user, token: token, email: email} do
+      {1, nil} = backdate_tokens(6)
       assert Accounts.update_user_email(user, token) == :ok
       changed_user = Repo.get!(User, user.id)
       assert changed_user.email != user.email
@@ -235,7 +240,7 @@ defmodule LicoriceLane.AccountsTest do
     end
 
     test "does not update email if token expired", %{user: user, token: token} do
-      {1, nil} = Repo.update_all(UserToken, set: [inserted_at: ~N[2020-01-01 00:00:00]])
+      {1, nil} = backdate_tokens(8)
       assert Accounts.update_user_email(user, token) == :error
       assert Repo.get!(User, user.id).email == user.email
       assert Repo.get_by(UserToken, user_id: user.id)
@@ -294,7 +299,26 @@ defmodule LicoriceLane.AccountsTest do
       assert %{current_password: ["is not valid"]} = errors_on(changeset)
     end
 
-    test "updates the password", %{user: user} do
+    test "updates the password and revokes only this user's tokens in every context", %{
+      user: user
+    } do
+      other_token = Accounts.generate_user_session_token(user_fixture())
+      session_token = Accounts.generate_user_session_token(user)
+
+      reset_token =
+        extract_user_token(&Accounts.deliver_user_reset_password_instructions(user, &1))
+
+      _ = extract_user_token(&Accounts.deliver_user_confirmation_instructions(user, &1))
+
+      _ =
+        extract_user_token(
+          &Accounts.deliver_user_update_email_instructions(
+            %{user | email: unique_user_email()},
+            user.email,
+            &1
+          )
+        )
+
       {:ok, user} =
         Accounts.update_user_password(user, valid_user_password(), %{
           password: "new valid password"
@@ -302,17 +326,11 @@ defmodule LicoriceLane.AccountsTest do
 
       assert is_nil(user.password)
       assert Accounts.get_user_by_email_and_password(user.email, "new valid password")
-    end
-
-    test "deletes all tokens for the given user", %{user: user} do
-      _ = Accounts.generate_user_session_token(user)
-
-      {:ok, _} =
-        Accounts.update_user_password(user, valid_user_password(), %{
-          password: "new valid password"
-        })
-
+      refute Accounts.get_user_by_email_and_password(user.email, valid_user_password())
       refute Repo.get_by(UserToken, user_id: user.id)
+      refute Accounts.get_user_by_session_token(session_token)
+      refute Accounts.get_user_by_reset_password_token(reset_token)
+      assert Accounts.get_user_by_session_token(other_token)
     end
   end
 
@@ -345,6 +363,7 @@ defmodule LicoriceLane.AccountsTest do
     end
 
     test "returns user by token", %{user: user, token: token} do
+      {1, nil} = backdate_tokens(59)
       assert session_user = Accounts.get_user_by_session_token(token)
       assert session_user.id == user.id
     end
@@ -354,7 +373,7 @@ defmodule LicoriceLane.AccountsTest do
     end
 
     test "does not return user for expired token", %{token: token} do
-      {1, nil} = Repo.update_all(UserToken, set: [inserted_at: ~N[2020-01-01 00:00:00]])
+      {1, nil} = backdate_tokens(61)
       refute Accounts.get_user_by_session_token(token)
     end
   end
@@ -363,8 +382,10 @@ defmodule LicoriceLane.AccountsTest do
     test "deletes the token" do
       user = user_fixture()
       token = Accounts.generate_user_session_token(user)
+      retained_token = Accounts.generate_user_session_token(user)
       assert Accounts.delete_user_session_token(token) == :ok
       refute Accounts.get_user_by_session_token(token)
+      assert Accounts.get_user_by_session_token(retained_token).id == user.id
     end
   end
 
@@ -400,6 +421,7 @@ defmodule LicoriceLane.AccountsTest do
     end
 
     test "confirms the email with a valid token", %{user: user, token: token} do
+      {1, nil} = backdate_tokens(6)
       assert {:ok, confirmed_user} = Accounts.confirm_user(token)
       assert confirmed_user.confirmed_at
       assert confirmed_user.confirmed_at != user.confirmed_at
@@ -414,7 +436,7 @@ defmodule LicoriceLane.AccountsTest do
     end
 
     test "does not confirm email if token expired", %{user: user, token: token} do
-      {1, nil} = Repo.update_all(UserToken, set: [inserted_at: ~N[2020-01-01 00:00:00]])
+      {1, nil} = backdate_tokens(8)
       assert Accounts.confirm_user(token) == :error
       refute Repo.get!(User, user.id).confirmed_at
       assert Repo.get_by(UserToken, user_id: user.id)
@@ -453,6 +475,7 @@ defmodule LicoriceLane.AccountsTest do
     end
 
     test "returns the user with valid token", %{user: %{id: id}, token: token} do
+      {1, nil} = backdate_tokens(0.5)
       assert %User{id: ^id} = Accounts.get_user_by_reset_password_token(token)
       assert Repo.get_by(UserToken, user_id: id)
     end
@@ -463,7 +486,7 @@ defmodule LicoriceLane.AccountsTest do
     end
 
     test "does not return the user if token expired", %{user: user, token: token} do
-      {1, nil} = Repo.update_all(UserToken, set: [inserted_at: ~N[2020-01-01 00:00:00]])
+      {1, nil} = backdate_tokens(2)
       refute Accounts.get_user_by_reset_password_token(token)
       assert Repo.get_by(UserToken, user_id: user.id)
     end
@@ -493,16 +516,34 @@ defmodule LicoriceLane.AccountsTest do
       assert "should be at most 72 character(s)" in errors_on(changeset).password
     end
 
-    test "updates the password", %{user: user} do
+    test "updates the password and revokes only this user's tokens in every context", %{
+      user: user
+    } do
+      other_token = Accounts.generate_user_session_token(user_fixture())
+      session_token = Accounts.generate_user_session_token(user)
+
+      reset_token =
+        extract_user_token(&Accounts.deliver_user_reset_password_instructions(user, &1))
+
+      _ = extract_user_token(&Accounts.deliver_user_confirmation_instructions(user, &1))
+
+      _ =
+        extract_user_token(
+          &Accounts.deliver_user_update_email_instructions(
+            %{user | email: unique_user_email()},
+            user.email,
+            &1
+          )
+        )
+
       {:ok, updated_user} = Accounts.reset_user_password(user, %{password: "new valid password"})
       assert is_nil(updated_user.password)
       assert Accounts.get_user_by_email_and_password(user.email, "new valid password")
-    end
-
-    test "deletes all tokens for the given user", %{user: user} do
-      _ = Accounts.generate_user_session_token(user)
-      {:ok, _} = Accounts.reset_user_password(user, %{password: "new valid password"})
+      refute Accounts.get_user_by_email_and_password(user.email, valid_user_password())
       refute Repo.get_by(UserToken, user_id: user.id)
+      refute Accounts.get_user_by_session_token(session_token)
+      refute Accounts.get_user_by_reset_password_token(reset_token)
+      assert Accounts.get_user_by_session_token(other_token)
     end
   end
 
@@ -510,5 +551,38 @@ defmodule LicoriceLane.AccountsTest do
     test "does not include password" do
       refute inspect(%User{password: "123456"}) =~ "password: \"123456\""
     end
+  end
+
+  describe "email token isolation" do
+    test "confirmation and password reset tokens cannot be interchanged" do
+      user = user_fixture()
+      confirm = extract_user_token(&Accounts.deliver_user_confirmation_instructions(user, &1))
+      reset = extract_user_token(&Accounts.deliver_user_reset_password_instructions(user, &1))
+      refute Accounts.get_user_by_reset_password_token(confirm)
+      assert Accounts.confirm_user(reset) == :error
+      refute Accounts.get_user!(user.id).confirmed_at
+      assert Accounts.get_user_by_reset_password_token(reset).id == user.id
+      assert {:ok, _} = Accounts.confirm_user(confirm)
+      assert Accounts.get_user_by_reset_password_token(reset).id == user.id
+    end
+
+    test "changing email invalidates tokens sent to the previous address" do
+      user = user_fixture()
+      confirm = extract_user_token(&Accounts.deliver_user_confirmation_instructions(user, &1))
+      reset = extract_user_token(&Accounts.deliver_user_reset_password_instructions(user, &1))
+      user |> Ecto.Changeset.change(email: unique_user_email()) |> Repo.update!()
+      assert Accounts.confirm_user(confirm) == :error
+      refute Accounts.get_user_by_reset_password_token(reset)
+      refute Accounts.get_user!(user.id).confirmed_at
+    end
+  end
+
+  defp backdate_tokens(days) do
+    inserted_at =
+      DateTime.utc_now()
+      |> DateTime.add(-round(days * 86_400), :second)
+      |> DateTime.truncate(:second)
+
+    Repo.update_all(UserToken, set: [inserted_at: inserted_at])
   end
 end

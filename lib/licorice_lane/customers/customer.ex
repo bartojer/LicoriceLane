@@ -13,6 +13,7 @@ defmodule LicoriceLane.Customers.Customer do
     field :phone_hash, Cloak.Ecto.SHA256
 
     has_many :locations, LicoriceLane.Locations.Location
+    has_many :rentals, LicoriceLane.Rentals.Rental
 
     timestamps(type: :utc_datetime)
   end

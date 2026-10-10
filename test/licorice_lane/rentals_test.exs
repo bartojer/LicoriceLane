@@ -104,7 +104,6 @@ defmodule LicoriceLane.RentalsTest do
 
   describe "list_rentals/0" do
     test "returns all rentals ordered by rented_at descending" do
-      # Create rentals with different rented_at times
       old_rental = rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), -7, :day)})
       recent_rental = rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), -1, :day)})
       newest_rental = rental_fixture(%{rented_at: DateTime.utc_now()})
@@ -112,40 +111,33 @@ defmodule LicoriceLane.RentalsTest do
       rentals = Rentals.list_rentals()
       rental_ids = Enum.map(rentals, & &1.id)
 
-      assert length(rentals) == 3
-      # Should be in descending order (newest first)
       assert rental_ids == [newest_rental.id, recent_rental.id, old_rental.id]
+
+      assert Enum.all?(rentals, fn rental ->
+               Enum.all?(
+                 [rental.customer, rental.rental_single_items, rental.rental_bulk_items],
+                 &Ecto.assoc_loaded?/1
+               )
+             end)
     end
 
     test "returns empty list when no rentals exist" do
       assert Rentals.list_rentals() == []
     end
-
-    test "preloads customer and rental items" do
-      rental = rental_fixture()
-
-      [fetched] = Rentals.list_rentals()
-
-      assert fetched.id == rental.id
-      assert Ecto.assoc_loaded?(fetched.customer)
-      assert Ecto.assoc_loaded?(fetched.rental_single_items)
-      assert Ecto.assoc_loaded?(fetched.rental_bulk_items)
-    end
   end
 
   describe "list_recent_rentals/1" do
     test "returns limited number of recent rentals" do
-      # Create 10 rentals
-      for i <- 1..10 do
-        rental_fixture(%{rented_at: DateTime.add(DateTime.utc_now(), -i, :hour)})
+      now = DateTime.utc_now()
+      rentals = for i <- 1..10, do: rental_fixture(%{rented_at: DateTime.add(now, -i, :hour)})
+
+      assert Enum.map(Rentals.list_recent_rentals(), & &1.id) ==
+               Enum.map(Enum.take(rentals, 5), & &1.id)
+
+      for limit <- [0, 3, 8, 20] do
+        assert Enum.map(Rentals.list_recent_rentals(limit), & &1.id) ==
+                 Enum.map(Enum.take(rentals, limit), & &1.id)
       end
-
-      # Default limit is 5
-      assert length(Rentals.list_recent_rentals()) == 5
-
-      # Custom limit
-      assert length(Rentals.list_recent_rentals(3)) == 3
-      assert length(Rentals.list_recent_rentals(8)) == 8
     end
   end
 
@@ -215,6 +207,12 @@ defmodule LicoriceLane.RentalsTest do
           status: :active
         })
 
+      late = rental_fixture(%{return_by: DateTime.add(now, -1, :day), status: :late})
+
+      for status <- [:reserved, :cancelled] do
+        rental_fixture(%{return_by: DateTime.add(now, -3, :day), status: status})
+      end
+
       # Overdue but returned
       _returned =
         rental_fixture(%{
@@ -233,22 +231,7 @@ defmodule LicoriceLane.RentalsTest do
 
       overdue_rentals = Rentals.list_overdue_rentals()
 
-      assert length(overdue_rentals) == 1
-      assert hd(overdue_rentals).id == overdue.id
-    end
-
-    test "includes late status rentals in overdue" do
-      overdue_late =
-        rental_fixture(%{
-          return_by: DateTime.add(DateTime.utc_now(), -1, :day),
-          returned_at: nil,
-          status: :late
-        })
-
-      overdue_rentals = Rentals.list_overdue_rentals()
-
-      assert length(overdue_rentals) == 1
-      assert hd(overdue_rentals).id == overdue_late.id
+      assert Enum.map(overdue_rentals, & &1.id) == [overdue.id, late.id]
     end
   end
 
@@ -273,29 +256,22 @@ defmodule LicoriceLane.RentalsTest do
   end
 
   describe "get_rental/1" do
-    test "returns the rental with given id" do
-      rental = rental_fixture()
-
-      assert fetched = Rentals.get_rental(rental.id)
-      assert fetched.id == rental.id
-      assert Ecto.assoc_loaded?(fetched.customer)
-    end
-
     test "returns nil when rental does not exist" do
       assert Rentals.get_rental(999_999) == nil
     end
   end
 
   describe "search_rentals/1" do
-    test "finds rentals by customer name" do
+    test "finds customer names case-insensitively and excludes unrelated rentals" do
       customer = customer_fixture(%{name: "Sunshine Events"})
       rental = rental_fixture(%{customer: customer})
       _other_rental = rental_fixture()
 
-      results = Rentals.search_rentals("Sunshine")
+      for query <- ["Sunshine", "sunshine", "sUnShInE"] do
+        assert Enum.map(Rentals.search_rentals(query), & &1.id) == [rental.id]
+      end
 
-      assert length(results) == 1
-      assert hd(results).id == rental.id
+      assert Rentals.search_rentals("nonexistent") == []
     end
 
     test "finds rentals by rental ID" do
@@ -306,41 +282,6 @@ defmodule LicoriceLane.RentalsTest do
 
       assert length(results) == 1
       assert hd(results).id == rental.id
-    end
-
-    test "search is case-insensitive" do
-      customer = customer_fixture(%{name: "Happy Party Planners"})
-      rental = rental_fixture(%{customer: customer})
-
-      results = Rentals.search_rentals("happy")
-
-      assert length(results) == 1
-      assert hd(results).id == rental.id
-    end
-
-    test "returns empty list when no matches found" do
-      rental_fixture()
-
-      assert Rentals.search_rentals("nonexistent") == []
-    end
-  end
-
-  describe "rental with items" do
-    test "rental can have single items" do
-      rental = rental_with_single_items_fixture()
-
-      fetched = Rentals.get_rental(rental.id)
-
-      assert length(fetched.rental_single_items) == 1
-    end
-
-    test "rental can have bulk items" do
-      rental = rental_with_bulk_items_fixture(%{quantity: 25})
-
-      fetched = Rentals.get_rental(rental.id)
-
-      assert length(fetched.rental_bulk_items) == 1
-      assert hd(fetched.rental_bulk_items).quantity == 25
     end
   end
 end

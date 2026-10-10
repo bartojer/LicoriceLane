@@ -3,7 +3,72 @@ defmodule LicoriceLaneWeb.InventoryLiveTest do
 
   import Phoenix.LiveViewTest
   import LicoriceLane.ItemsFixtures
+  import LicoriceLane.LocationsFixtures
   alias LicoriceLane.Inventory
+  alias LicoriceLane.Locations.ItemsLocation
+  alias LicoriceLane.Repo
+
+  test "single availability agrees between cards and details for each tracking status", %{
+    conn: conn
+  } do
+    items =
+      for status <- [:available, :rented, :damaged], do: single_item_fixture(%{status: status})
+
+    {:ok, view, _} = live(conn, "/inventory")
+
+    for item <- items do
+      available? = item.single_item.status == :available
+      card = "#items-#{item.id}"
+      button = if available?, do: "button:not([disabled])", else: "button[disabled]"
+      card_label = if available?, do: "Add to Cart", else: "Sold Out"
+      detail_label = if available?, do: "Add to Cart", else: "Currently Unavailable"
+      absent_label = if available?, do: "Out of Stock", else: "Add to Cart"
+      assert has_element?(view, "#{card} #{button}", card_label)
+      view |> element(card) |> render_click()
+      assert_patch(view, "/inventory/#{item.id}")
+      assert has_element?(view, "#item-detail-modal h2", item.name)
+      assert has_element?(view, "#item-detail-modal", item.description)
+      assert has_element?(view, "#item-detail-modal img[src='#{item.image_path}']")
+      assert has_element?(view, "#item-detail-modal", "$10.00")
+      assert has_element?(view, "#item-detail-modal #{button}", detail_label)
+      refute has_element?(view, "#item-detail-modal", absent_label)
+      render_patch(view, "/inventory")
+      refute has_element?(view, "#item-detail-modal")
+    end
+  end
+
+  test "bulk cards and details use only warehouse stock, summed across warehouses", %{conn: conn} do
+    customer_location = customer_location_fixture()
+    unavailable = bulk_item_fixture(%{location: customer_location, quantity: 100})
+    available = bulk_item_fixture(%{quantity: 2})
+
+    Repo.insert!(%ItemsLocation{
+      item_id: available.id,
+      location_id: warehouse_fixture().id,
+      quantity: 3
+    })
+
+    Repo.insert!(%ItemsLocation{
+      item_id: available.id,
+      location_id: customer_location.id,
+      quantity: 100
+    })
+
+    {:ok, view, _} = live(conn, "/inventory")
+    assert has_element?(view, "#items-#{available.id}", "In Stock: 5")
+    assert has_element?(view, "#items-#{unavailable.id} button[disabled]", "Sold Out")
+
+    for {item, button, label} <- [
+          {available, "button:not([disabled])", "Add to Cart"},
+          {unavailable, "button[disabled]", "Currently Unavailable"}
+        ] do
+      view |> element("#items-#{item.id}") |> render_click()
+      assert_patch(view, "/inventory/#{item.id}")
+      assert has_element?(view, "#item-detail-modal h2", item.name)
+      assert has_element?(view, "#item-detail-modal #{button}", label)
+      render_patch(view, "/inventory")
+    end
+  end
 
   test "stream cards have direct-child IDs and category buttons follow the active filter", %{
     conn: conn

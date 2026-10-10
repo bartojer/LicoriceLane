@@ -5,6 +5,8 @@ defmodule LicoriceLane.CustomersTest do
   alias LicoriceLane.Customers.Customer
 
   import LicoriceLane.CustomersFixtures
+  import LicoriceLane.LocationsFixtures
+  import LicoriceLane.RentalsFixtures
 
   describe "list_customers/0" do
     test "returns all customers ordered by name" do
@@ -24,12 +26,14 @@ defmodule LicoriceLane.CustomersTest do
   end
 
   describe "get_customer/1" do
-    test "returns the customer with given id" do
+    test "returns the customer with locations preloaded" do
       customer = customer_fixture()
+      location = customer_location_fixture(%{customer: customer})
 
       assert fetched = Customers.get_customer(customer.id)
       assert fetched.id == customer.id
       assert fetched.name == customer.name
+      assert Enum.map(fetched.locations, & &1.id) == [location.id]
     end
 
     test "returns nil when customer does not exist" do
@@ -53,7 +57,7 @@ defmodule LicoriceLane.CustomersTest do
   end
 
   describe "search_customers/1" do
-    setup do
+    test "combines partial/case-insensitive names with exact contact lookups" do
       customer1 =
         customer_fixture(%{
           name: "Sunshine Events Co.",
@@ -75,50 +79,26 @@ defmodule LicoriceLane.CustomersTest do
           phone: "555-0789"
         })
 
-      %{customer1: customer1, customer2: customer2, customer3: customer3}
-    end
+      for {term, id} <- [
+            {"Sunshine", customer1.id},
+            {"happy", customer2.id},
+            {"contact@sunshine.com", customer1.id},
+            {"555-0789", customer3.id}
+          ] do
+        assert Enum.map(Customers.search_customers(term), & &1.id) == [id]
+      end
 
-    test "finds customers by partial name match", %{customer1: customer1} do
-      results = Customers.search_customers("Sunshine")
-
-      assert length(results) == 1
-      assert hd(results).id == customer1.id
-    end
-
-    test "finds customers by case-insensitive name match", %{customer2: customer2} do
-      results = Customers.search_customers("happy")
-
-      assert length(results) == 1
-      assert hd(results).id == customer2.id
-    end
-
-    test "finds customers by exact email match", %{customer1: customer1} do
-      results = Customers.search_customers("contact@sunshine.com")
-
-      assert length(results) == 1
-      assert hd(results).id == customer1.id
-    end
-
-    test "finds customers by exact phone match", %{customer3: customer3} do
-      results = Customers.search_customers("555-0789")
-
-      assert length(results) == 1
-      assert hd(results).id == customer3.id
-    end
-
-    test "returns empty list when no matches found" do
-      assert Customers.search_customers("nonexistent") == []
+      # Encrypted fields must never acquire partial-search behavior.
+      for term <- ["nonexistent", "contact@sunshine", "555-078"] do
+        assert Customers.search_customers(term) == []
+      end
     end
 
     test "returns unique customers when multiple search types match" do
-      customer = customer_fixture(%{name: "Test Corp", email: "test@corp.com"})
-
-      # Search by name that also happens to contain part of domain
-      results = Customers.search_customers("Test")
-
-      # Should only return the customer once
-      assert length(results) == 1
-      assert hd(results).id == customer.id
+      term = "test@corp.com"
+      customer = customer_fixture(%{name: "Contact #{term}", email: term})
+      other = customer_fixture(%{name: "Another #{term}"})
+      assert Enum.map(Customers.search_customers(term), & &1.id) == [other.id, customer.id]
     end
   end
 
@@ -324,20 +304,39 @@ defmodule LicoriceLane.CustomersTest do
   end
 
   describe "Customer encryption" do
-    test "encrypts sensitive fields" do
+    test "encrypts every sensitive field at rest and decrypts on reload" do
       attrs = valid_customer_attributes()
       {:ok, customer} = Customers.create_customer(attrs)
 
-      # Reload from database to see stored values
       stored_customer = Repo.get!(Customer, customer.id)
-
-      # Email and phone should be decrypted when read
-      assert stored_customer.email == attrs.email
-      assert stored_customer.phone == attrs.phone
-
-      # Email and phone hashes should be set
+      fields = [:email, :phone, :contact_person, :billing_address, :notes]
+      assert Map.take(stored_customer, fields) == Map.take(attrs, fields)
       assert stored_customer.email_hash != nil
       assert stored_customer.phone_hash != nil
+
+      %{rows: [[name | encrypted]]} =
+        Ecto.Adapters.SQL.query!(
+          Repo,
+          "SELECT name, email, phone, contact_person, billing_address, notes FROM customers WHERE id = $1",
+          [customer.id]
+        )
+
+      assert name == attrs.name
+
+      assert Enum.all?(Enum.zip(encrypted, Enum.map(fields, &attrs[&1])), fn {stored, value} ->
+               is_binary(stored) and stored != value
+             end)
     end
+  end
+
+  test "rental counts include customers without bookings and count each customer's bookings once" do
+    empty = customer_fixture(%{name: "Alpha no bookings"})
+    booked = customer_fixture(%{name: "Beta booked"})
+    rental_fixture(%{customer: booked})
+    rental_fixture(%{customer: booked, status: :returned})
+
+    assert Enum.map(Customers.list_customers_with_rental_count(), fn row ->
+             {row.customer.id, row.rental_count}
+           end) == [{empty.id, 0}, {booked.id, 2}]
   end
 end

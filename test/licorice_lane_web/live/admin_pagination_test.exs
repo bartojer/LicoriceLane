@@ -25,7 +25,7 @@ defmodule LicoriceLaneWeb.AdminPaginationTest do
     @container container
     @component component
 
-    test "#{tab} pages survive refresh, normalize inputs and recover when the last page disappears",
+    test "#{tab} pagination and filters survive refresh, normalize inputs and recover deleted pages",
          %{conn: conn} do
       customer = if @tab == "bookings", do: customer_fixture()
       records = for n <- 1..26, do: fixture(@tab, n, customer)
@@ -57,27 +57,23 @@ defmodule LicoriceLaneWeb.AdminPaginationTest do
       end
 
       view |> with_target(target) |> render_click("page", %{"page" => "2"})
-      last = Enum.find(records, &String.ends_with?(last_id, "-#{&1.id}"))
-      delete_record(@tab, last)
-      Phoenix.LiveView.send_update(view.pid, @component, id: tab_component_id(@tab))
-      assert row_ids(view, @container) == first_ids
-      refute has_element?(view, "nav[aria-label=Pagination]")
-    end
 
-    test "#{tab} filters reset the page and persist across component updates", %{conn: conn} do
-      customer = if @tab == "bookings", do: customer_fixture()
-      for n <- 1..26, do: fixture(@tab, n, customer)
-      {:ok, view, _} = live(conn, "/admin")
-      view |> element("button[phx-value-tab='#{@tab}']:not([phx-target])") |> render_click()
-      view |> element("nav[aria-label=Pagination] button", "Next") |> render_click()
       filter_empty(view, @tab)
       assert row_ids(view, @container) == []
       refute has_element?(view, "nav[aria-label=Pagination]")
       Phoenix.LiveView.send_update(view.pid, @component, id: tab_component_id(@tab))
       assert row_ids(view, @container) == []
       filter_all(view, @tab)
-      assert length(row_ids(view, @container)) == 25
+      assert row_ids(view, @container) == first_ids
       assert has_element?(view, "nav[aria-label=Pagination] button", "Next")
+      view |> element("nav[aria-label=Pagination] button", "Next") |> render_click()
+      assert row_ids(view, @container) == [last_id]
+
+      last = Enum.find(records, &String.ends_with?(last_id, "-#{&1.id}"))
+      delete_record(@tab, last)
+      Phoenix.LiveView.send_update(view.pid, @component, id: tab_component_id(@tab))
+      assert row_ids(view, @container) == first_ids
+      refute has_element?(view, "nav[aria-label=Pagination]")
     end
   end
 

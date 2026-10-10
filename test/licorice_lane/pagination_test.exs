@@ -28,7 +28,12 @@ defmodule LicoriceLane.PaginationTest do
       Inventory.list_filtered_items_paginated("lighting", "Matching", page: 2, page_size: 2)
 
     assert Enum.map(first ++ last, & &1.id) == expected
-    assert Enum.all?(first, &Ecto.assoc_loaded?(&1.items_locations))
+
+    for item <- first ++ last do
+      assert item.single_item == nil
+      assert Ecto.assoc_loaded?(item.items_locations)
+      assert Enum.all?(item.items_locations, &Ecto.assoc_loaded?(&1.location))
+    end
 
     assert {last, 3} ==
              Inventory.list_filtered_items_paginated("lighting", "Matching",
@@ -79,8 +84,13 @@ defmodule LicoriceLane.PaginationTest do
     {first, 3} = Rentals.list_rentals_paginated("active", page_size: 2)
     {last, 3} = Rentals.list_rentals_paginated("active", page: 99, page_size: 2)
     assert Enum.map(first ++ last, & &1.id) == expected
-    assert Enum.all?(first, &Ecto.assoc_loaded?(&1.customer))
-    assert Enum.all?(first, &Ecto.assoc_loaded?(&1.rental_bulk_items))
+
+    for rental <- first ++ last do
+      assert rental.customer.id == customer.id
+      assert Ecto.assoc_loaded?(rental.rental_bulk_items)
+      assert Ecto.assoc_loaded?(rental.rental_single_items)
+    end
+
     assert {[], 0} == Rentals.list_rentals_paginated("cancelled", page: 99)
     assert {[_], 1} = Rentals.list_rentals_paginated("returned")
   end

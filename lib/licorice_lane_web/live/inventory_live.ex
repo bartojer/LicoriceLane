@@ -59,8 +59,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
             Discover our elegant collection of event decor, tableware, and ambiance essentials
           </p>
         </div>
-
-    <!-- Filter/Search Section -->
+        <!-- Filter/Search Section -->
         <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-between items-center">
           <div class="flex gap-2">
             <button
@@ -109,8 +108,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
             </div>
           </form>
         </div>
-
-    <!-- Inventory Grid -->
+        <!-- Inventory Grid -->
         <div
           class="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           id="items"
@@ -154,8 +152,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
             </div>
           <% end %>
         </div>
-
-    <!-- Item Info -->
+        <!-- Item Info -->
         <div>
           <h2 class="text-3xl font-bold text-gray-900">{@selected_item.name}</h2>
           <div class="mt-3 flex items-center gap-2">
@@ -176,14 +173,12 @@ defmodule LicoriceLaneWeb.InventoryLive do
             <% end %>
           </div>
         </div>
-
-    <!-- Description -->
+        <!-- Description -->
         <div>
           <h3 class="text-lg font-semibold text-gray-900 mb-2">Description</h3>
           <p class="text-gray-600 leading-relaxed">{@selected_item.description}</p>
         </div>
-
-    <!-- Price -->
+        <!-- Price -->
         <div class="border-t pt-4">
           <div class="flex items-baseline gap-2">
             <span class="text-sm text-gray-500">Rental Price:</span>
@@ -192,8 +187,7 @@ defmodule LicoriceLaneWeb.InventoryLive do
             </span>
           </div>
         </div>
-
-    <!-- Action Button -->
+        <!-- Action Button -->
         <div class="border-t pt-4">
           <%= if availability_status(@selected_item) == :available do %>
             <button class="w-full px-6 py-3 bg-brand text-white text-lg font-medium rounded-lg hover:bg-brand/90 transition-colors">
@@ -245,9 +239,14 @@ defmodule LicoriceLaneWeb.InventoryLive do
   defp availability_status(item) do
     # Use the same logic from inventory_components
     cond do
-      item.item_type == :single and item.single_item != nil -> :available
-      item.item_type == :bulk -> check_bulk_availability(item)
-      true -> :unavailable
+      item.item_type == :single and item.single_item != nil ->
+        if item.single_item.status == :available, do: :available, else: :unavailable
+
+      item.item_type == :bulk ->
+        check_bulk_availability(item)
+
+      true ->
+        :unavailable
     end
   end
 

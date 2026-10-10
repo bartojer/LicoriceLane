@@ -35,6 +35,10 @@ defmodule LicoriceLane.RentalDetailsTest do
     rental = rental_with_single_items_fixture(%{single_item: single})
     Repo.insert!(%RentalBulkItem{rental_id: rental.id, item_id: bulk.id, quantity: 7})
     details = Rentals.get_rental(rental.id)
+    assert details.id == rental.id
+    assert details.customer.id == rental.customer_id
+    assert length(details.rental_single_items) == 1
+    assert length(details.rental_bulk_items) == 1
     assert hd(details.rental_single_items).single_item.item.name == single.name
 
     assert hd(details.rental_single_items).single_item.location.id ==

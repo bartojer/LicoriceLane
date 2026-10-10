@@ -23,7 +23,7 @@ defmodule LicoriceLaneWeb.UserAuthTest do
       assert token = get_session(conn, :user_token)
       assert get_session(conn, :live_socket_id) == "users_sessions:#{Base.url_encode64(token)}"
       assert redirected_to(conn) == ~p"/"
-      assert Accounts.get_user_by_session_token(token)
+      assert Accounts.get_user_by_session_token(token).id == user.id
     end
 
     test "clears everything previously stored in the session", %{conn: conn, user: user} do
@@ -115,6 +115,34 @@ defmodule LicoriceLaneWeb.UserAuthTest do
       refute get_session(conn, :user_token)
       refute conn.assigns.current_user
     end
+
+    test "rejects tampered remember cookies and revoked cookie or session tokens", %{
+      conn: conn,
+      user: user
+    } do
+      logged_in = UserAuth.log_in_user(fetch_cookies(conn), user, %{"remember_me" => "true"})
+      %{value: signed_token} = logged_in.resp_cookies[@remember_me_cookie]
+      token = get_session(logged_in, :user_token)
+
+      tampered =
+        conn
+        |> put_req_cookie(@remember_me_cookie, signed_token <> "tampered")
+        |> UserAuth.fetch_current_user([])
+
+      refute tampered.assigns.current_user
+      refute get_session(tampered, :user_token)
+
+      Accounts.delete_user_session_token(token)
+
+      revoked_cookie =
+        conn
+        |> put_req_cookie(@remember_me_cookie, signed_token)
+        |> UserAuth.fetch_current_user([])
+
+      revoked_session = conn |> put_session(:user_token, token) |> UserAuth.fetch_current_user([])
+      refute revoked_cookie.assigns.current_user
+      refute revoked_session.assigns.current_user
+    end
   end
 
   describe "on_mount :mount_current_user" do
@@ -128,23 +156,13 @@ defmodule LicoriceLaneWeb.UserAuthTest do
       assert updated_socket.assigns.current_user.id == user.id
     end
 
-    test "assigns nil to current_user assign if there isn't a valid user_token", %{conn: conn} do
-      user_token = "invalid_token"
-      session = conn |> put_session(:user_token, user_token) |> get_session()
+    test "assigns nil when the session token is invalid or absent" do
+      for session <- [%{"user_token" => "invalid_token"}, %{}] do
+        assert {:cont, socket} =
+                 UserAuth.on_mount(:mount_current_user, %{}, session, %LiveView.Socket{})
 
-      {:cont, updated_socket} =
-        UserAuth.on_mount(:mount_current_user, %{}, session, %LiveView.Socket{})
-
-      assert updated_socket.assigns.current_user == nil
-    end
-
-    test "assigns nil to current_user assign if there isn't a user_token", %{conn: conn} do
-      session = conn |> get_session()
-
-      {:cont, updated_socket} =
-        UserAuth.on_mount(:mount_current_user, %{}, session, %LiveView.Socket{})
-
-      assert updated_socket.assigns.current_user == nil
+        assert socket.assigns.current_user == nil
+      end
     end
   end
 
@@ -159,29 +177,17 @@ defmodule LicoriceLaneWeb.UserAuthTest do
       assert updated_socket.assigns.current_user.id == user.id
     end
 
-    test "redirects to login page if there isn't a valid user_token", %{conn: conn} do
-      user_token = "invalid_token"
-      session = conn |> put_session(:user_token, user_token) |> get_session()
+    test "redirects to login when the session token is invalid or absent" do
+      for session <- [%{"user_token" => "invalid_token"}, %{}] do
+        assert {:halt, socket} =
+                 UserAuth.on_mount(:ensure_authenticated, %{}, session, admin_socket())
 
-      socket = %LiveView.Socket{
-        endpoint: LicoriceLaneWeb.Endpoint,
-        assigns: %{__changed__: %{}, flash: %{}}
-      }
+        assert socket.assigns.current_user == nil
+        assert {:redirect, %{to: "/users/log_in"}} = socket.redirected
 
-      {:halt, updated_socket} = UserAuth.on_mount(:ensure_authenticated, %{}, session, socket)
-      assert updated_socket.assigns.current_user == nil
-    end
-
-    test "redirects to login page if there isn't a user_token", %{conn: conn} do
-      session = conn |> get_session()
-
-      socket = %LiveView.Socket{
-        endpoint: LicoriceLaneWeb.Endpoint,
-        assigns: %{__changed__: %{}, flash: %{}}
-      }
-
-      {:halt, updated_socket} = UserAuth.on_mount(:ensure_authenticated, %{}, session, socket)
-      assert updated_socket.assigns.current_user == nil
+        assert Phoenix.Flash.get(socket.assigns.flash, :error) ==
+                 "You must log in to access this page."
+      end
     end
   end
 
@@ -256,13 +262,15 @@ defmodule LicoriceLaneWeb.UserAuthTest do
       user_token = Accounts.generate_user_session_token(user)
       session = conn |> put_session(:user_token, user_token) |> get_session()
 
-      assert {:halt, _updated_socket} =
+      assert {:halt, updated_socket} =
                UserAuth.on_mount(
                  :redirect_if_user_is_authenticated,
                  %{},
                  session,
                  %LiveView.Socket{}
                )
+
+      assert {:redirect, %{to: "/"}} = updated_socket.redirected
     end
 
     test "doesn't redirect if there is no authenticated user", %{conn: conn} do
