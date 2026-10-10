@@ -30,6 +30,16 @@ mix test test/licorice_lane_web/live/admin_inventory_delete_test.exs --only brow
 
 Commands with `--only browser` require the browser runtime variables described in README. Rebuild assets with `mix assets.build` before browser validation when source assets or their dependencies have changed. A skipped browser case is not proof that browser behavior passed.
 
+## Regression testing before pushing
+
+Before pushing to the primary branch (`main` in this repository, or `master` where applicable), run the full ExUnit regression suite and both existing browser regressions against the changes being pushed. Configure the README's browser runtime variables and confirm that the upload and inventory-deletion browser cases run and pass. Their optional local tags do not make them optional for validation before pushing. Skipped tests do not count as completed validation.
+
+Run `mix test --seed 0` with the browser runtime configured to include both cases in the full suite. If the full suite was already run against the same code with those cases skipped, run `mix test test/licorice_lane_web/live/inventory_upload_test.exs test/licorice_lane_web/live/admin_inventory_delete_test.exs --only browser --seed 0` with the runtime configured before pushing.
+
+When controlling a Windows browser from WSL, a combined run has reproduced `ERR_CONNECTION_REFUSED` on upload after the deletion case; upload passes in isolation. Both cases start and stop a loopback server on port 4002, so Windows-to-WSL port forwarding is a suspected cause. To validate every case in separate Mix processes, run `mix test --exclude browser --seed 0`, then run each browser file individually with `--only browser --seed 0` and the browser runtime configured. All three commands must pass; excluding browser cases from the first command does not waive either browser check.
+
+If regressions fail or cannot run, resolve the issue or report the blocker before pushing; do not push while required regression validation remains incomplete.
+
 ## Requirements when establishing the broader E2E runner
 
 - Provide documented commands for running the suite and a single failing test headlessly, without interactive setup. Document server startup, database setup, fixture lifecycle, and cleanup.

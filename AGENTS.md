@@ -107,6 +107,7 @@
 - Never commit production secrets or replace runtime env-based configuration with checked-in secrets.
 
 ## Testing Notes
+- Before pushing to the primary branch (`main` here, or `master` in repositories that use it), run the full ExUnit regression suite and the existing upload and inventory-deletion browser regressions, and confirm they pass against the changes being pushed. Configure the browser runtime instead of accepting optional skips. Skipped tests do not count as completed validation; if required regressions cannot run or fail, resolve the issue or report the blocker before pushing. See [docs/TESTING.md](docs/TESTING.md) and README for commands and runtime setup.
 - Use ExUnit/context tests and Phoenix.LiveViewTest for broad application coverage; use the official Playwright Test runner in TypeScript for expanded browser E2E coverage.
 - Tests will mostly be run and debugged by agents. Prioritize reproducible headless commands, isolated fixtures, structured failure reports, and saved debugging artifacts.
 - Preserve regression expectations when debugging. Do not weaken assertions or skip failing tests merely to obtain a passing run; explain evidence for any legitimate expectation change.
