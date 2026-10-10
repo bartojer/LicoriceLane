@@ -76,7 +76,7 @@
 - Message-related UI updates rely on subscription/broadcast flow as well.
 - Cache invalidation is wired into current inventory/customer/message writes, but query caching is not currently integrated. Do not assume a query is cached without checking its callers.
 - LiveComponent subscriptions receive PubSub messages in the parent LiveView process. Explicitly refresh components from the parent; child `handle_info` functions alone do not establish realtime updates. Current admin refresh gaps are listed in `docs/STATUS.md`.
-- `Rentals` currently exposes read queries only. New rental writes must account for inventory effects and appropriate cache invalidation.
+- `Rentals` exposes read queries and event/schedule edits through `update_rental_details/2`, which preserves lifecycle and stock and invalidates rental/dashboard caches. Creation, allocation/availability checks, status transitions and physical returns still need context APIs with inventory effects and appropriate cache invalidation.
 
 ## Coding Patterns
 - Keep business logic in contexts, not in LiveViews or controllers.

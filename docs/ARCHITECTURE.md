@@ -58,7 +58,13 @@ The component keeps the selected customer on the server and ignores IDs supplied
 
 Bookings and rentals refer to the same `Rental` entity. `RentalSingleItem` connects a rental to a `SingleItem`; `RentalBulkItem` connects a rental to an `Item` with a quantity.
 
-`Rentals` currently provides read queries, preloads, status/event-date filtering, and search. It has no create/update/delete context API. Seeds and rental fixtures insert records through Repo directly.
+`Rentals` provides read queries, preloads, status/event-date filtering, search, and event/schedule editing. Seeds and rental fixtures still insert records through Repo directly. Creation, inventory availability/reservations, allocation changes, lifecycle status transitions, cancellation and physical returns are not implemented as context operations.
+
+`get_rental/1` preloads customer plus single-item names/current locations and bulk-item names/quantities for the admin details modal. `change_rental_details/2` and `update_rental_details/2` accept only event type/date, pickup (`rented_at`) and due date (`return_by`). Pickup/due dates are required; due cannot precede pickup and pickup cannot follow a recorded actual return. Event fields remain optional. Inputs without timezone offsets are interpreted as UTC; the admin datetime inputs explicitly label UTC and preserve seconds when submitting an unchanged form.
+
+Schedule writes lock the rental row and compare its editable fields with the caller's snapshot, returning an error changeset for deleted or outdated records. Validation uses current lifecycle data. Success returns full details, invalidates rental/dashboard cache entries, and broadcasts a rental update after the transaction. These edits preserve status, actual return, customer, item allocations, stock quantities/locations/statuses and movement history. They do not reserve stock or check overlapping bookings; those policies belong to the unfinished rental lifecycle workflow.
+
+BookingsComponent retains form errors/drafts, supports cancellation, and reloads the current status/date-filtered page after a save, clamping bounds if an edited event leaves the filter. AdminLive forwards rental updates to active bookings/dashboard components. Open read-only details reload current data; open edit forms retain their snapshot and draft so a concurrent save reports a conflict rather than silently overwriting another edit.
 
 `list_rentals_paginated/2` accepts `:date_filter` in its options as a `Date` or ISO 8601 date string. It combines the status query with an `event_date` range from midnight UTC inclusive to the next midnight exclusive before counting and paginating. Selected dates exclude rentals with missing event dates; blank, missing, or invalid dates leave the status query unchanged. This filter uses event date, independently of pickup date (`rented_at`).
 
@@ -89,14 +95,15 @@ Admin routes use both authentication/admin plugs and LiveView `on_mount` hooks. 
 | `invalidate_rentals/0` | `:rentals`, `:dashboard_stats` |
 | `invalidate_messages/0` | `:messages`, `:new_messages_count` |
 
-`invalidate_rentals/0` exists for future rental write paths; the current read-only Rentals context does not call it. Direct Repo writes bypass context invalidation and broadcasts.
+`update_rental_details/2` calls `invalidate_rentals/0` after success. Failed, deleted and outdated writes retain cache entries and do not broadcast. Direct Repo writes bypass context invalidation and broadcasts.
 
 | Topic | Emitted messages | Producers / current consumers |
 | --- | --- | --- |
 | `"inventory:updates"` | `{:inventory_updated, item_id}` | Successful item creation/update/deletion; public InventoryLive reloads its listing, AdminLive refreshes the active dashboard/inventory component |
 | `"messages"` | `{:message_created, message}`, `{:message_updated, message}` | Successful message creation/admin update; AdminLive refreshes its new-message count and active messages component |
+| `"rentals:updates"` | `{:rental_updated, rental_id}` | Successful event/schedule edit; AdminLive refreshes the active bookings/dashboard component |
 
-AdminLive owns both subscriptions and explicitly sends updates to the active component: inventory events reload the dashboard or inventory list; message creation/update events reload the messages list and refresh the unread badge. Inactive tabs load current data when mounted. List refreshes retain search/category/status filters and the current page, clamping the page when the filtered list shrinks. Dashboard streams are configured once in `mount/1` so repeated refreshes can safely reset them.
+AdminLive owns these subscriptions and explicitly sends updates to the active component: inventory events reload the dashboard or inventory list; message creation/update events reload the messages list and refresh the unread badge; rental schedule updates reload the dashboard or bookings component. Inactive tabs load current data when mounted. List refreshes retain search/category/status/date filters and the current page, clamping the page when the filtered list shrinks. Dashboard streams are configured once in `mount/1` so repeated refreshes can safely reset them.
 
 For an updated message selected in the detail modal, MessagesComponent reads its current database state by ID rather than applying a potentially older queued broadcast. Unsaved internal notes are tracked separately from the selected record and survive refreshes; clean notes follow external changes. Notes still save on blur, and saving them does not overwrite a concurrently changed status. Add/edit forms and their upload selections are retained during broadcasts. Message deletion invalidates cache entries but does not broadcast a deletion event; there is currently no admin deletion UI for messages.
 
@@ -120,7 +127,7 @@ Admin add/edit components keep their file inputs mounted during previews and ini
 | Admin pagination, inventory deletion and public inventory | [admin_pagination_test.exs](../test/licorice_lane_web/live/admin_pagination_test.exs), [admin_inventory_delete_test.exs](../test/licorice_lane_web/live/admin_inventory_delete_test.exs), [inventory_live_test.exs](../test/licorice_lane_web/live/inventory_live_test.exs) | Existing account/domain fixtures |
 | Admin realtime refresh | [admin_realtime_test.exs](../test/licorice_lane_web/live/admin_realtime_test.exs) | Existing account/inventory/location/message fixtures |
 | Customers | [customers_test.exs](../test/licorice_lane/customers_test.exs), [admin_customers_test.exs](../test/licorice_lane_web/live/admin_customers_test.exs) | `CustomersFixtures`, `LocationsFixtures` |
-| Rentals | [rentals_test.exs](../test/licorice_lane/rentals_test.exs) | `RentalsFixtures` |
+| Rentals | [rentals_test.exs](../test/licorice_lane/rentals_test.exs), [rental_details_test.exs](../test/licorice_lane/rental_details_test.exs), [admin_bookings_test.exs](../test/licorice_lane_web/live/admin_bookings_test.exs) | `RentalsFixtures`, existing inventory/customer fixtures |
 | Messages and contact form | [messages_test.exs](../test/licorice_lane/messages_test.exs), [contact_live_test.exs](../test/licorice_lane_web/live/contact_live_test.exs) | `MessagesFixtures` |
 | Marketing and error pages | Tests under `test/licorice_lane_web/controllers` | `ConnCase` |
 

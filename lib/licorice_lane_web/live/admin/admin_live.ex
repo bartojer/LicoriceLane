@@ -18,6 +18,7 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
     if connected?(socket) do
       Messages.subscribe()
       Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "inventory:updates")
+      Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "rentals:updates")
     end
 
     socket =
@@ -55,6 +56,22 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
       "dashboard" -> send_update(DashboardComponent, id: "dashboard-component")
       "inventory" -> send_update(InventoryComponent, id: "inventory-component")
       _ -> :ok
+    end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:rental_updated, rental_id}, socket) do
+    case socket.assigns.active_tab do
+      "dashboard" ->
+        send_update(DashboardComponent, id: "dashboard-component")
+
+      "bookings" ->
+        send_update(BookingsComponent, id: "bookings-component", updated_rental_id: rental_id)
+
+      _ ->
+        :ok
     end
 
     {:noreply, socket}

@@ -6,6 +6,14 @@ defmodule LicoriceLane.Rentals do
   import Ecto.Query
   alias LicoriceLane.Repo
   alias LicoriceLane.Rentals.Rental
+  alias LicoriceLane.Cache
+
+  @detail_fields [:event_type, :event_date, :rented_at, :return_by]
+  @detail_preloads [
+    :customer,
+    rental_single_items: [single_item: [:item, :location]],
+    rental_bulk_items: :item
+  ]
 
   @doc """
   Returns all rentals with customer preloaded.
@@ -175,8 +183,101 @@ defmodule LicoriceLane.Rentals do
   """
   def get_rental(id) do
     Rental
-    |> preload([:customer, :rental_single_items, :rental_bulk_items])
+    |> preload(^@detail_preloads)
     |> Repo.get(id)
+  end
+
+  @doc """
+  Validates event and scheduling edits without persisting them.
+
+  Only event_type, event_date, rented_at and return_by are editable here.
+  Pickup and return-by are required, return-by cannot precede pickup, and pickup
+  cannot follow an already recorded actual return. Event date/type are optional.
+  Datetimes without an offset are interpreted as UTC by the schema type.
+  Status, customer, actual return and item allocations are lifecycle operations.
+  """
+  def change_rental_details(%Rental{} = rental, attrs \\ %{}) do
+    rental
+    |> Ecto.Changeset.cast(attrs, @detail_fields)
+    |> Ecto.Changeset.validate_required([:rented_at, :return_by])
+    |> validate_schedule()
+  end
+
+  defp validate_schedule(changeset) do
+    pickup = Ecto.Changeset.get_field(changeset, :rented_at)
+    due = Ecto.Changeset.get_field(changeset, :return_by)
+    returned = Ecto.Changeset.get_field(changeset, :returned_at)
+
+    changeset =
+      if match?(%DateTime{}, pickup) and match?(%DateTime{}, due) and
+           DateTime.compare(due, pickup) == :lt do
+        Ecto.Changeset.add_error(changeset, :return_by, "must be on or after pickup")
+      else
+        changeset
+      end
+
+    if match?(%DateTime{}, pickup) and match?(%DateTime{}, returned) and
+         DateTime.compare(pickup, returned) == :gt do
+      Ecto.Changeset.add_error(changeset, :rented_at, "cannot be after the actual return")
+    else
+      changeset
+    end
+  end
+
+  @doc """
+  Updates a booking's event and schedule while preserving its lifecycle and stock.
+
+  Locks the current rental row and rejects edits based on an older schedule.
+  Returns {:error, changeset} for invalid, deleted or concurrently changed records.
+  Successful writes return full details, invalidate rental/dashboard cache entries
+  and broadcast {:rental_updated, id} on "rentals:updates" after commit.
+  This operation does not move, reserve or return inventory.
+  """
+  def update_rental_details(%Rental{} = rental, attrs) do
+    result =
+      Repo.transaction(fn ->
+        current = Repo.one(from r in Rental, where: r.id == ^rental.id, lock: "FOR UPDATE")
+
+        cond do
+          is_nil(current) ->
+            rollback_details(rental, attrs, "is no longer available")
+
+          Map.take(current, @detail_fields) != Map.take(rental, @detail_fields) ->
+            rollback_details(rental, attrs, "has changed; close and reopen this booking")
+
+          true ->
+            case current |> change_rental_details(attrs) |> Repo.update() do
+              {:ok, updated} -> Repo.preload(updated, @detail_preloads)
+              {:error, changeset} -> Repo.rollback(changeset)
+            end
+        end
+      end)
+
+    case result do
+      {:ok, updated} ->
+        Cache.invalidate_rentals()
+
+        Phoenix.PubSub.broadcast(
+          LicoriceLane.PubSub,
+          "rentals:updates",
+          {:rental_updated, updated.id}
+        )
+
+        {:ok, updated}
+
+      error ->
+        error
+    end
+  end
+
+  defp rollback_details(rental, attrs, message) do
+    changeset =
+      rental
+      |> change_rental_details(attrs)
+      |> Ecto.Changeset.add_error(:id, message)
+      |> Map.put(:action, :update)
+
+    Repo.rollback(changeset)
   end
 
   @doc """
