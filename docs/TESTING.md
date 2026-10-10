@@ -38,6 +38,18 @@ Run `mix test --seed 0` with the browser runtime configured to include both case
 
 When controlling a Windows browser from WSL, a combined run has reproduced `ERR_CONNECTION_REFUSED` on upload after the deletion case; upload passes in isolation. Both cases start and stop a loopback server on port 4002, so Windows-to-WSL port forwarding is a suspected cause. To validate every case in separate Mix processes, run `mix test --exclude browser --seed 0`, then run each browser file individually with `--only browser --seed 0` and the browser runtime configured. All three commands must pass; excluding browser cases from the first command does not waive either browser check.
 
+The forwarding failure has also occurred across separate Mix processes. A native Linux Node and Playwright-managed Chromium inside WSL avoid that forwarding dependency. With a compatible Linux Node runtime and an installed Playwright package, use the following in the WSL shell alongside the README's Mix settings (replace the module path):
+
+```bash
+export UPLOAD_BROWSER_NODE="$(command -v node)"
+export UPLOAD_PLAYWRIGHT_MODULE="/absolute/path/to/node_modules/playwright"
+export PLAYWRIGHT_BROWSERS_PATH="$PWD/_build/playwright-browsers"
+unset UPLOAD_BROWSER_EXECUTABLE UPLOAD_BROWSER_SCRIPT
+"$UPLOAD_BROWSER_NODE" "$UPLOAD_PLAYWRIGHT_MODULE/cli.js" install chromium
+```
+
+Use a Node version supported by that Playwright package and install any Linux browser libraries its prerequisite check identifies. Keep `PLAYWRIGHT_BROWSERS_PATH` set when running the tests. The default scripts then resolve from the repository and communicate with the test server within WSL. The October 9 realtime validation used a project-local Linux Node 22.19.0 runtime; generated runtime files remain ignored.
+
 If regressions fail or cannot run, resolve the issue or report the blocker before pushing; do not push while required regression validation remains incomplete.
 
 ## Requirements when establishing the broader E2E runner

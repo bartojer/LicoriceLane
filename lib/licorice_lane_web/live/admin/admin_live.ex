@@ -17,6 +17,7 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Messages.subscribe()
+      Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "inventory:updates")
     end
 
     socket =
@@ -50,18 +51,30 @@ defmodule LicoriceLaneWeb.Admin.AdminLive do
 
   @impl true
   def handle_info({:inventory_updated, _item_id}, socket) do
-    # Inventory updates are handled by child components (DashboardComponent, InventoryComponent)
-    # Just acknowledge the message here to prevent crashes
+    case socket.assigns.active_tab do
+      "dashboard" -> send_update(DashboardComponent, id: "dashboard-component")
+      "inventory" -> send_update(InventoryComponent, id: "inventory-component")
+      _ -> :ok
+    end
+
     {:noreply, socket}
   end
 
   @impl true
   def handle_info({:message_created, _message}, socket) do
+    if socket.assigns.active_tab == "messages" do
+      send_update(MessagesComponent, id: "messages-component")
+    end
+
     {:noreply, assign(socket, :new_messages_count, Messages.count_new_messages())}
   end
 
   @impl true
-  def handle_info({:message_updated, _message}, socket) do
+  def handle_info({:message_updated, message}, socket) do
+    if socket.assigns.active_tab == "messages" do
+      send_update(MessagesComponent, id: "messages-component", updated_message_id: message.id)
+    end
+
     {:noreply, assign(socket, :new_messages_count, Messages.count_new_messages())}
   end
 

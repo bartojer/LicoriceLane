@@ -6,9 +6,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
 
   @impl true
   def update(assigns, socket) do
-    if connected?(socket) do
-      Messages.subscribe()
-    end
+    {updated_message_id, assigns} = Map.pop(assigns, :updated_message_id)
 
     socket =
       socket
@@ -17,7 +15,10 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
       |> assign_new(:filter_status, fn -> :all end)
       |> assign_new(:selected_message, fn -> nil end)
       |> assign_new(:show_modal, fn -> false end)
+      |> assign_new(:admin_notes, fn -> "" end)
+      |> assign_new(:notes_dirty, fn -> false end)
       |> assign_new(:page, fn -> 1 end)
+      |> refresh_selected_message(updated_message_id)
       |> load_messages()
 
     {:ok, socket}
@@ -89,20 +90,29 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
     message = Messages.get_message!(message_id)
 
     # Auto-mark as read when opened
-    if message.status == :new do
-      Messages.mark_as_read(message)
-    end
+    message =
+      if message.status == :new do
+        case Messages.mark_as_read(message) do
+          {:ok, updated} -> updated
+          {:error, _changeset} -> message
+        end
+      else
+        message
+      end
 
     socket =
       socket
       |> assign(:selected_message, message)
       |> assign(:show_modal, true)
+      |> assign(:admin_notes, message.admin_notes || "")
+      |> assign(:notes_dirty, false)
 
     {:noreply, socket}
   end
 
   def handle_event("close_modal", _params, socket) do
-    {:noreply, assign(socket, show_modal: false, selected_message: nil)}
+    {:noreply,
+     assign(socket, show_modal: false, selected_message: nil, admin_notes: "", notes_dirty: false)}
   end
 
   def handle_event("update_status", %{"status" => status}, socket) do
@@ -121,33 +131,40 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
     {:noreply, assign(socket, selected_message: updated_message)}
   end
 
+  def handle_event("change_admin_notes", %{"admin_notes" => notes}, socket) do
+    {:noreply, assign(socket, admin_notes: notes, notes_dirty: true)}
+  end
+
   def handle_event("update_admin_notes", %{"value" => notes}, socket) do
     message = socket.assigns.selected_message
-    Messages.update_message_status(message, %{status: message.status, admin_notes: notes})
 
-    # Refresh the message details
-    updated_message = Messages.get_message!(message.id)
+    case Messages.update_message_status(message, %{admin_notes: notes}) do
+      {:ok, updated} ->
+        {:noreply,
+         assign(socket, selected_message: updated, admin_notes: notes, notes_dirty: false)}
 
-    {:noreply, assign(socket, selected_message: updated_message)}
+      {:error, _changeset} ->
+        {:noreply, assign(socket, admin_notes: notes, notes_dirty: true)}
+    end
   end
 
-  def handle_info({:message_created, _message}, socket) do
-    {:noreply, load_messages(socket)}
-  end
-
-  def handle_info({:message_updated, message}, socket) do
-    socket =
-      socket
-      |> stream_insert(:messages, message)
-      |> maybe_update_selected_message(message)
-
-    {:noreply, socket}
-  end
-
-  defp maybe_update_selected_message(socket, message) do
+  defp refresh_selected_message(socket, message_id) do
     if socket.assigns.selected_message &&
-         socket.assigns.selected_message.id == message.id do
-      assign(socket, :selected_message, message)
+         socket.assigns.selected_message.id == message_id do
+      # Read current state rather than applying a potentially older queued broadcast.
+      message = Messages.get_message(message_id)
+      socket = assign(socket, :selected_message, message)
+
+      cond do
+        is_nil(message) ->
+          assign(socket, show_modal: false, admin_notes: "", notes_dirty: false)
+
+        socket.assigns.notes_dirty ->
+          socket
+
+        true ->
+          assign(socket, :admin_notes, message.admin_notes || "")
+      end
     else
       socket
     end
@@ -278,7 +295,7 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
               </tbody>
             </table>
           </div>
-           <.pagination pagination={@pagination} target={@myself} />
+          <.pagination pagination={@pagination} target={@myself} />
         </div>
       </div>
       <!-- Message Detail Modal -->
@@ -328,18 +345,25 @@ defmodule LicoriceLaneWeb.Admin.MessagesComponent do
             </div>
           </div>
           <!-- Admin Notes -->
-          <div class="border-t border-gray-200 pt-4">
+          <form
+            id="admin-notes-form"
+            phx-change="change_admin_notes"
+            phx-target={@myself}
+            class="border-t border-gray-200 pt-4"
+          >
             <label for="admin-notes" class="block text-sm font-medium text-gray-700 mb-2">
               Admin Notes (Internal)
-            </label> <textarea
+            </label>
+            <textarea
               id="admin-notes"
+              name="admin_notes"
               phx-blur="update_admin_notes"
               phx-target={@myself}
               rows="3"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-brand focus:border-brand"
               placeholder="Add internal notes about this message..."
-            >{@selected_message.admin_notes}</textarea>
-          </div>
+            >{@admin_notes}</textarea>
+          </form>
           <!-- Status Actions -->
           <div class="border-t border-gray-200 pt-4">
             <label class="block text-sm font-medium text-gray-700 mb-2">Update Status</label>

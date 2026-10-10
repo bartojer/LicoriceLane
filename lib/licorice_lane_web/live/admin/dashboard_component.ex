@@ -5,16 +5,15 @@ defmodule LicoriceLaneWeb.Admin.DashboardComponent do
   import LicoriceLaneWeb.AdminHelpers
 
   @impl true
-  def update(assigns, socket) do
-    # Subscribe to inventory updates on first mount
-    socket =
-      if connected?(socket) && !Map.has_key?(socket.assigns, :subscribed) do
-        Phoenix.PubSub.subscribe(LicoriceLane.PubSub, "inventory:updates")
-        assign(socket, :subscribed, true)
-      else
-        socket
-      end
+  def mount(socket) do
+    {:ok,
+     stream_configure(socket, :low_stock_items,
+       dom_id: fn item_data -> "low-stock-item-#{item_data.item.id}" end
+     )}
+  end
 
+  @impl true
+  def update(assigns, socket) do
     socket =
       socket
       |> assign(assigns)
@@ -35,16 +34,8 @@ defmodule LicoriceLaneWeb.Admin.DashboardComponent do
 
     socket
     |> assign(:stats, stats)
-    |> stream_configure(:low_stock_items,
-      dom_id: fn item_data -> "low-stock-item-#{item_data.item.id}" end
-    )
     |> stream(:low_stock_items, low_stock_data, reset: true)
     |> stream(:recent_bookings, recent_bookings, reset: true)
-  end
-
-  def handle_info({:inventory_updated, _item_id}, socket) do
-    # Reload low stock items when inventory changes
-    {:noreply, load_dashboard_data(socket)}
   end
 
   @impl true
@@ -113,8 +104,7 @@ defmodule LicoriceLaneWeb.Admin.DashboardComponent do
           </div>
         </div>
       </div>
-
-    <!-- Recent Activity Section -->
+      <!-- Recent Activity Section -->
       <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <!-- Recent Bookings -->
         <div class="bg-white shadow rounded-lg">
@@ -154,8 +144,7 @@ defmodule LicoriceLaneWeb.Admin.DashboardComponent do
             </div>
           </div>
         </div>
-
-    <!-- Low Stock Items -->
+        <!-- Low Stock Items -->
         <div class="bg-white shadow rounded-lg">
           <div class="px-4 py-5 sm:p-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Inventory Alert</h3>

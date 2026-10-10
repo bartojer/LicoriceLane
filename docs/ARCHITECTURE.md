@@ -89,10 +89,12 @@ Admin routes use both authentication/admin plugs and LiveView `on_mount` hooks. 
 
 | Topic | Emitted messages | Producers / current consumers |
 | --- | --- | --- |
-| `"inventory:updates"` | `{:inventory_updated, item_id}` | Successful item creation/update/deletion; public InventoryLive subscribes and reloads its listing |
-| `"messages"` | `{:message_created, message}`, `{:message_updated, message}` | Successful message creation/admin update; AdminLive refreshes its new-message count |
+| `"inventory:updates"` | `{:inventory_updated, item_id}` | Successful item creation/update/deletion; public InventoryLive reloads its listing, AdminLive refreshes the active dashboard/inventory component |
+| `"messages"` | `{:message_created, message}`, `{:message_updated, message}` | Successful message creation/admin update; AdminLive refreshes its new-message count and active messages component |
 
-Message deletion invalidates cache entries but does not broadcast a deletion event. The dashboard/messages components also contain subscriptions and `handle_info` functions. LiveComponents share their parent's process: subscriptions deliver messages to the parent LiveView, not directly to component callbacks. AdminLive currently acknowledges inventory events without refreshing child components and handles message events by refreshing only its badge. Verify and implement explicit parent-to-component refresh when changing realtime UI behavior; see [status](STATUS.md#verification-gaps).
+AdminLive owns both subscriptions and explicitly sends updates to the active component: inventory events reload the dashboard or inventory list; message creation/update events reload the messages list and refresh the unread badge. Inactive tabs load current data when mounted. List refreshes retain search/category/status filters and the current page, clamping the page when the filtered list shrinks. Dashboard streams are configured once in `mount/1` so repeated refreshes can safely reset them.
+
+For an updated message selected in the detail modal, MessagesComponent reads its current database state by ID rather than applying a potentially older queued broadcast. Unsaved internal notes are tracked separately from the selected record and survive refreshes; clean notes follow external changes. Notes still save on blur, and saving them does not overwrite a concurrently changed status. Add/edit forms and their upload selections are retained during broadcasts. Message deletion invalidates cache entries but does not broadcast a deletion event; there is currently no admin deletion UI for messages.
 
 ## Upload storage
 
@@ -112,6 +114,7 @@ Admin add/edit components keep their file inputs mounted during previews and ini
 | Inventory | [inventory_test.exs](../test/licorice_lane/inventory_test.exs), [inventory_lifecycle_test.exs](../test/licorice_lane/inventory_lifecycle_test.exs) | `ItemsFixtures`, `LocationsFixtures` |
 | Pagination and cache writes | [pagination_test.exs](../test/licorice_lane/pagination_test.exs), [write_cache_test.exs](../test/licorice_lane/write_cache_test.exs) | Existing domain fixtures |
 | Admin pagination, inventory deletion and public inventory | [admin_pagination_test.exs](../test/licorice_lane_web/live/admin_pagination_test.exs), [admin_inventory_delete_test.exs](../test/licorice_lane_web/live/admin_inventory_delete_test.exs), [inventory_live_test.exs](../test/licorice_lane_web/live/inventory_live_test.exs) | Existing account/domain fixtures |
+| Admin realtime refresh | [admin_realtime_test.exs](../test/licorice_lane_web/live/admin_realtime_test.exs) | Existing account/inventory/location/message fixtures |
 | Customers | [customers_test.exs](../test/licorice_lane/customers_test.exs) | `CustomersFixtures` |
 | Rentals | [rentals_test.exs](../test/licorice_lane/rentals_test.exs) | `RentalsFixtures` |
 | Messages and contact form | [messages_test.exs](../test/licorice_lane/messages_test.exs), [contact_live_test.exs](../test/licorice_lane_web/live/contact_live_test.exs) | `MessagesFixtures` |
