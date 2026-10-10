@@ -11,9 +11,61 @@ defmodule LicoriceLane.Rentals do
   @detail_fields [:event_type, :event_date, :rented_at, :return_by]
   @detail_preloads [
     :customer,
+    :destination_location,
+    allocations: [:item, :source_location],
     rental_single_items: [single_item: [:item, :location]],
     rental_bulk_items: :item
   ]
+
+  @doc "Validates a new managed booking's customer, destination and UTC schedule."
+  def change_rental_booking(rental \\ %Rental{}, attrs \\ %{}),
+    do: LicoriceLane.Rentals.Lifecycle.change_booking(rental, attrs)
+
+  @doc "Reserves item/source/quantity allocations for a positive pickup-to-return window without moving stock."
+  def create_rental(attrs), do: LicoriceLane.Rentals.Lifecycle.create(attrs)
+
+  @doc "Checks requested allocation quantities for a UTC schedule without saving. Availability is advisory; booking checks again under item locks."
+  def check_rental_availability(attrs),
+    do: LicoriceLane.Rentals.Lifecycle.check_availability(attrs)
+
+  @doc "Replaces a reserved booking's allocations atomically after checking warehouse availability."
+  def update_rental_allocations(rental, attrs),
+    do: LicoriceLane.Rentals.Lifecycle.reallocate(rental, attrs)
+
+  @doc "Checks out a reserved booking, moving its stock to the customer's destination and recording history."
+  def checkout_rental(rental), do: LicoriceLane.Rentals.Lifecycle.checkout(rental)
+
+  @doc "Cancels an uncollected reservation and releases its commitments without moving stock."
+  def cancel_rental(rental), do: LicoriceLane.Rentals.Lifecycle.cancel(rental)
+
+  @doc "Returns positive quantities by allocation ID to their original warehouses; completes only when all units are back."
+  def return_rental(rental, attrs), do: LicoriceLane.Rentals.Lifecycle.return_items(rental, attrs)
+
+  @doc "Returns names and IDs for booking form choices without loading sensitive customer fields."
+  def booking_options do
+    %{
+      customers:
+        Repo.all(
+          from c in LicoriceLane.Customers.Customer, order_by: c.name, select: {c.name, c.id}
+        ),
+      items:
+        Repo.all(from i in LicoriceLane.Items.Item, order_by: i.name, select: {i.name, i.id}),
+      warehouses:
+        Repo.all(
+          from l in LicoriceLane.Locations.Location,
+            where: l.location_type == :warehouse,
+            order_by: l.name,
+            select: {l.name, l.id}
+        ),
+      destinations:
+        Repo.all(
+          from l in LicoriceLane.Locations.Location,
+            where: l.location_type == :customer,
+            order_by: l.name,
+            select: {l.name, l.id}
+        )
+    }
+  end
 
   @doc """
   Returns all rentals with customer preloaded.
@@ -72,7 +124,11 @@ defmodule LicoriceLane.Rentals do
     now = DateTime.utc_now()
 
     Rental
-    |> where([r], r.rented_at > ^now)
+    |> where(
+      [r],
+      (not r.inventory_managed and r.rented_at > ^now) or
+        (r.inventory_managed and r.status == :reserved)
+    )
     |> order_by([r], asc: r.rented_at)
     |> preload([:customer, :rental_single_items, :rental_bulk_items])
   end
@@ -95,7 +151,8 @@ defmodule LicoriceLane.Rentals do
     |> preload([:customer, :rental_single_items, :rental_bulk_items])
   end
 
-  defp build_filtered_rentals_query(status) when status in ["returned", "cancelled"] do
+  defp build_filtered_rentals_query(status)
+       when status in ["reserved", "returned", "cancelled"] do
     status_atom = String.to_existing_atom(status)
 
     Rental
@@ -136,7 +193,11 @@ defmodule LicoriceLane.Rentals do
     now = DateTime.utc_now()
 
     Rental
-    |> where([r], r.rented_at > ^now)
+    |> where(
+      [r],
+      (not r.inventory_managed and r.rented_at > ^now) or
+        (r.inventory_managed and r.status == :reserved)
+    )
     |> order_by([r], asc: r.rented_at)
     |> preload([:customer, :rental_single_items, :rental_bulk_items])
     |> Repo.all()
@@ -173,6 +234,7 @@ defmodule LicoriceLane.Rentals do
 
     Rental
     |> where([r], r.rented_at >= ^now and r.rented_at <= ^week_from_now)
+    |> where([r], not r.inventory_managed or r.status == :reserved)
     |> order_by([r], asc: r.rented_at)
     |> preload([:customer, :rental_single_items, :rental_bulk_items])
     |> Repo.all()
@@ -231,9 +293,18 @@ defmodule LicoriceLane.Rentals do
   Returns {:error, changeset} for invalid, deleted or concurrently changed records.
   Successful writes return full details, invalidate rental/dashboard cache entries
   and broadcast {:rental_updated, id} on "rentals:updates" after commit.
-  This operation does not move, reserve or return inventory.
+  Legacy edits preserve stock. Managed scheduling edits recheck commitments under
+  item locks and increment lifecycle version; pickup is fixed after checkout.
   """
   def update_rental_details(%Rental{} = rental, attrs) do
+    if rental.inventory_managed do
+      LicoriceLane.Rentals.Lifecycle.update_details(rental, attrs)
+    else
+      update_legacy_details(rental, attrs)
+    end
+  end
+
+  defp update_legacy_details(rental, attrs) do
     result =
       Repo.transaction(fn ->
         current = Repo.one(from r in Rental, where: r.id == ^rental.id, lock: "FOR UPDATE")

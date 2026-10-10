@@ -35,6 +35,9 @@ Validated on October 7, 2026 in Ubuntu WSL with Elixir 1.18.4, Erlang/OTP 28.0.2
 | October 9 customer creation: `mix test --exclude browser --seed 0` | 382 total cases, 380 passed, 2 browser cases excluded and run separately below |
 | October 9 customer creation: upload browser regression with native WSL Node/Playwright Chromium, seed 0 | 1 selected browser case passed, 13 excluded |
 | October 9 customer creation: deletion browser regression with native WSL Node/Playwright Chromium, seed 0 | 1 selected browser case passed, 9 excluded |
+| October 9 managed rental lifecycle: `mix test --exclude browser --seed 0` | 409 total cases, 407 passed, 2 browser cases excluded and run separately below |
+| October 9 managed rental lifecycle: upload browser regression with native WSL Node/Playwright Chromium, seed 0 | 1 selected browser case passed, 13 excluded |
+| October 9 managed rental lifecycle: deletion browser regression with native WSL Node/Playwright Chromium, seed 0 | 1 selected browser case passed, 9 excluded |
 
 The October 7 suite had 20 test files and 24 additional cases. The [inventory lifecycle tests](../test/licorice_lane/inventory_lifecycle_test.exs) cover writes and side effects; [admin route tests](../test/licorice_lane_web/live/admin_live_test.exs), [authorization hook/plug tests](../test/licorice_lane_web/user_auth_test.exs), and the registration regression test cover admin access. Existing query assertions were strengthened and unused test bindings cleaned up.
 
@@ -52,6 +55,8 @@ Booking details/schedule editing adds eleven [context regressions](../test/licor
 
 Customer creation adds nine [LiveView regressions](../test/licorice_lane_web/live/admin_customer_creation_test.exs) for name-only/full creation, encrypted storage and exact lookups, cache invalidation, validation/retry, cancellation, draft refresh, search/page retention, forged IDs, save replay and malformed nested payloads in both create/edit modes. Two independent subagent reviews validated design and implementation; a malformed-payload crash found during review was fixed and re-reviewed. All 382 cases passed across the server suite and separate upload/deletion browser runs, with no skips; formatting and asset builds passed.
 
+Managed rental lifecycle adds 27 cases across [context](../test/licorice_lane/rental_lifecycle_test.exs), [independent-connection concurrency](../test/licorice_lane/rental_concurrency_test.exs) and [admin forms](../test/licorice_lane_web/live/admin_rental_lifecycle_test.exs). They cover advisory availability, peak overlap/adjacent windows, multi-source summaries, single/bulk checkout, physical rollback after earlier movements, partial returns and completion, stock conservation/history, overdue stock, schedule constraints, cancellation, stale/replayed/foreign actions, legacy refusal, inventory edit/deletion protections, malformed inputs, integer bounds and retained/numeric-order drafts. Two independent reviews validated design and implementation; their findings were fixed, tested and re-reviewed. All 409 cases passed across the server suite and separate required browser runs, with no skips; formatting and asset builds passed. The additive migration preserves existing bookings. Legacy reconciliation remains deliberately separate below.
+
 The locked LiveView/lazy_html dependencies require Elixir 1.15 or newer. `.tool-versions` pins the validated runtime, and [README](../README.md#running-tests-from-windows-through-wsl) documents the project-local WSL tool/build setup. No seeds or database resets were used for these runs.
 
 ## Implemented in code
@@ -66,10 +71,10 @@ The feature table describes the current source, including the reviewed admin ref
 | Admin access | Authentication and admin checks in router and LiveView session; tab navigation | [AdminLive](../lib/licorice_lane_web/live/admin/admin_live.ex), [UserAuth](../lib/licorice_lane_web/user_auth.ex) |
 | Dashboard | Database-backed booking count, low-stock list, and recent bookings | [DashboardComponent](../lib/licorice_lane_web/live/admin/dashboard_component.ex) |
 | Inventory | Search/category filters, pagination, per-warehouse quantity queries, atomic single/bulk creation, base item editing, image uploads, confirmed deletion of unreferenced single/bulk items | [Inventory](../lib/licorice_lane/inventory.ex), admin inventory/add/edit components |
-| Bookings | Paginated status/UTC event-date filters; full details with assigned single/bulk items; validated event/pickup/return schedule edits in UTC with stale-edit rejection and filtered-page refresh | [BookingsComponent](../lib/licorice_lane_web/live/admin/bookings_component.ex), [Rentals](../lib/licorice_lane/rentals.ex) |
+| Bookings | Managed booking creation and advisory availability, timed reservations, multiple source warehouses, allocation edits, checkout, cancellation and partial returns with atomic stock/history writes and stale-version rejection; legacy metadata editing retained | [BookingsComponent](../lib/licorice_lane_web/live/admin/bookings_component.ex), [Rentals](../lib/licorice_lane/rentals.ex), [Lifecycle](../lib/licorice_lane/rentals/lifecycle.ex) |
 | Customers | Paginated listing and name/exact-email/exact-phone search; full details/location modal and validated creation/editing with cancellation, error retention and filtered-page refresh; context CRUD | [ClientsComponent](../lib/licorice_lane_web/live/admin/clients_component.ex), [Customers](../lib/licorice_lane/customers.ex) |
 | Admin messages | Paginated name search/status filters, detail modal, status changes, internal notes, opening-new-message mark-as-read operation | [MessagesComponent](../lib/licorice_lane_web/live/admin/messages_component.ex) |
-| Write side effects | Inventory/customer/message/rental cache invalidation; inventory/message create/update and rental schedule-update broadcasts | Contexts and [Cache](../lib/licorice_lane/cache.ex) |
+| Write side effects | Inventory/customer/message/rental cache invalidation; inventory/message create/update and managed rental lifecycle/schedule broadcasts | Contexts and [Cache](../lib/licorice_lane/cache.ex) |
 
 Public inventory receives inventory PubSub events and has a listing refresh handler. AdminLive subscribes to inventory, message and rental events and explicitly refreshes the affected active component. Message events also refresh the new-message badge; rental schedule edits refresh bookings/dashboard views. List refreshes preserve filters/page and clamp shrinking results. Selected message/booking details reload current data while editing drafts remain intact; add/edit fields and upload selections survive broadcasts.
 
@@ -77,7 +82,7 @@ Public inventory receives inventory PubSub events and has a listing refresh hand
 
 | Workflow | Current limitation | Starting point |
 | --- | --- | --- |
-| Rental lifecycle writes | Event/schedule updates exist; creation, availability/reservation, allocation changes, status transitions, cancellation and physical returns still need context APIs and inventory effects | [Rentals](../lib/licorice_lane/rentals.ex) |
+| Legacy booking reconciliation | Historical bookings retain metadata editing, but stock actions and managed allocation of items referenced by active/late legacy rentals require a separate explicit reconciliation workflow | [Lifecycle](../lib/licorice_lane/rentals/lifecycle.ex) |
 | Admin provisioning | No seeded admin account, promotion context API, or provisioning UI | [README bootstrap](../README.md#local-admin-access) |
 
 Visible buttons and schemas do not imply these workflows are complete. Keep business operations in contexts when implementing them.
@@ -85,7 +90,7 @@ Visible buttons and schemas do not imply these workflows are complete. Keep busi
 ## Verification gaps
 
 - **Browser E2E runner:** The agreed default for expanded E2E coverage is official Playwright Test in TypeScript, with reproducible headless commands, isolated fixtures, JSON reports, and failure artifacts for agents. The working upload and deletion regressions currently use Playwright through optional ExUnit-launched scripts. A full runner configuration, pinned project dependencies, reports/traces, and a required browser CI job have not been established. Preserve the existing regressions during migration; see [testing strategy](TESTING.md).
-- **Remaining realtime events:** Message deletion has no broadcast or admin UI; account/customer realtime events are not currently defined. Inventory/message create/update and rental schedule-update refresh behavior is implemented; future rental lifecycle operations need their own side-effect contracts.
+- **Remaining realtime events:** Message deletion has no broadcast or admin UI; account/customer realtime events are not currently defined. Inventory/message create/update and managed rental lifecycle/schedule refresh behavior is implemented.
 - **Cache integration:** Cachex starts with a five-minute TTL and write invalidation is present. Query paths currently do not call the cache fetch/get/put helpers, so caching benefits are not established. Add caching and dependency-aware invalidation together if needed.
 - **Test coverage:** Inventory lifecycle tests cover atomic single/bulk creation and single-detail edits, rollback, stock defaults, single-item updates, single/bulk deletion and reference protection, warehouse totals, cache invalidation, and broadcasts. Admin tests cover registration privilege protection, admin plugs/mount hooks, route access, dashboard mounting, revoked privileges, inventory upload workflows, and server-side deletion confirmation/cancellation. Dedicated pagination/context/cache tests and admin/public inventory web tests now cover filtered totals, stable page boundaries, invalid/out-of-range inputs, list shrinkage, component refresh/filter preservation, and public stream updates. Deletion dialog JavaScript now has focused browser coverage; other detailed admin workflows still need coverage. Do not use seeds as test setup.
 - **Historical seed-hash issue:** The December 2025 encryption note reported missing hashes during seeding. Current changeset logic differs, seeds call `Customers.create_customer/1`, and customer tests include stored-hash and exact-search assertions. The old seed-specific failure has not been reproduced or declared fixed in this review. See [encryption notes](../ENCRYPTION_IMPLEMENTATION_STATUS.md).
@@ -97,7 +102,7 @@ Visible buttons and schemas do not imply these workflows are complete. Keep busi
 - `mix setup` and `mix ecto.setup` run seeds that delete existing business records. `mix ecto.reset` drops the configured database as well. Use these only with disposable data.
 - The historical encryption migration deletes customer records instead of migrating their plaintext contents into encrypted data. Review it before applying pending migrations to valuable data.
 - Customer and message lookup hashes currently use SHA256. The custom HMAC type is unused even though production runtime configuration requires `HMAC_SECRET`.
-- Upcoming bookings use future `rented_at`; active queries check stored status without excluding future rentals. These are current rules to review when extending booking workflows.
+- New managed bookings use `:reserved` until checkout; Upcoming includes these reservations and excludes their terminal statuses. Legacy rows retain the historical future-pickup rule. Active and overdue queries describe checked-out managed bookings by stored status/due date.
 
 ## Commit scope
 

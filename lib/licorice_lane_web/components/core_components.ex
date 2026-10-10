@@ -108,6 +108,7 @@ defmodule LicoriceLaneWeb.CoreComponents do
   end
 
   defp status_badge_class(:pending), do: "bg-yellow-100 text-yellow-800"
+  defp status_badge_class(:reserved), do: "bg-blue-100 text-blue-800"
   defp status_badge_class(:confirmed), do: "bg-blue-100 text-blue-800"
   defp status_badge_class(:active), do: "bg-green-100 text-green-800"
   defp status_badge_class(:setup), do: "bg-purple-100 text-purple-800"
@@ -252,7 +253,7 @@ defmodule LicoriceLaneWeb.CoreComponents do
   """
   attr :type, :string, default: nil
   attr :class, :string, default: nil
-  attr :rest, :global, include: ~w(disabled form name value)
+  attr :rest, :global, include: ~w(disabled form formnovalidate name value)
 
   slot :inner_block, required: true
 

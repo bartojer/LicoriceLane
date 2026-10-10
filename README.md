@@ -8,6 +8,7 @@ Licorice Lane is a Phoenix / LiveView application for an event decor rental busi
 - [Architecture](docs/ARCHITECTURE.md): contexts, schemas, routes, events, and test entry points.
 - [Current status](docs/STATUS.md): implemented code, unfinished workflows, and verification gaps.
 - [Testing strategy](docs/TESTING.md): selected test tools, current browser harness, and agent execution/debugging policy.
+- [Rental lifecycle](docs/ARCHITECTURE.md#rentals-and-booking-terminology): reservations, multi-warehouse checkout/partial returns and legacy reconciliation policy. Apply the additive `20261010010000` migration with `mix ecto.migrate` when updating an existing database; do not run seeds or reset it.
 - [Item creation guide](ITEM_CREATION_GUIDE.md): atomic single and bulk item creation.
 - [Customer encryption](ENCRYPTION_IMPLEMENTATION_STATUS.md): current encryption/search behavior and historical issue notes.
 - [Historical admin refactor](admin_ref_plan.md): original goals and pointers to current code.

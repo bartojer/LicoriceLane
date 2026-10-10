@@ -12,7 +12,7 @@ defmodule LicoriceLane.Rentals.RentalSingleItem do
   @doc false
   def changeset(rental_single_item, attrs) do
     rental_single_item
-    |> cast(attrs, [:rental_id, :single_item])
-    |> validate_required([:rental_id, :single_item])
+    |> cast(attrs, [:rental_id, :single_item_id])
+    |> validate_required([:rental_id, :single_item_id])
   end
 end

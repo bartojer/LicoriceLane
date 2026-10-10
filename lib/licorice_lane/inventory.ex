@@ -584,20 +584,7 @@ defmodule LicoriceLane.Inventory do
   Updates an item and broadcasts the update.
   """
   def update_item(%Item{} = item, attrs) do
-    result =
-      item
-      |> Item.changeset(attrs)
-      |> Repo.update()
-
-    case result do
-      {:ok, updated_item} ->
-        Cache.invalidate_inventory()
-        broadcast_inventory_update(updated_item.id)
-        {:ok, updated_item}
-
-      error ->
-        error
-    end
+    locked_item_update(item, attrs, false)
   end
 
   @doc """
@@ -608,39 +595,77 @@ defmodule LicoriceLane.Inventory do
   Location and bulk quantities are unchanged.
   """
   def update_item_with_details(%Item{} = item, attrs) do
-    item = Repo.preload(item, :single_item)
-    changeset = Item.changeset(item, attrs)
-    multi = Ecto.Multi.new() |> Ecto.Multi.update(:item, changeset)
+    locked_item_update(item, attrs, true)
+  end
 
-    multi =
-      if item.item_type == :single && item.single_item do
-        details = Map.take(attrs, [:condition, :status, "condition", "status"])
+  defp locked_item_update(item, attrs, tracking?) do
+    result =
+      Repo.transaction(fn ->
+        current = Repo.one(from i in Item, where: i.id == ^item.id, lock: "FOR UPDATE")
 
-        Ecto.Multi.update(
-          multi,
-          :single_item,
-          LicoriceLane.Items.SingleItem.changeset(item.single_item, details)
-        )
-      else
-        multi
-      end
+        if is_nil(current),
+          do:
+            Repo.rollback(
+              Ecto.Changeset.add_error(Item.changeset(item, attrs), :id, "is no longer available")
+            )
 
-    case Repo.transaction(multi) do
-      {:ok, %{item: updated}} ->
+        changeset = Item.changeset(current, attrs)
+
+        changeset =
+          if Ecto.Changeset.get_field(changeset, :item_type) != current.item_type,
+            do: Ecto.Changeset.add_error(changeset, :item_type, "cannot change after creation"),
+            else: changeset
+
+        updated =
+          case Repo.update(changeset) do
+            {:ok, updated} -> updated
+            {:error, invalid} -> Repo.rollback(invalid)
+          end
+
+        single =
+          if tracking? and current.item_type == :single,
+            do: Repo.get(LicoriceLane.Items.SingleItem, current.id)
+
+        if single do
+          details = Map.take(attrs, [:condition, :status, "condition", "status"])
+          tracking_cs = LicoriceLane.Items.SingleItem.changeset(single, details)
+
+          tracking_cs =
+            if Ecto.Changeset.get_field(tracking_cs, :status) != single.status and
+                 LicoriceLane.Rentals.Lifecycle.item_committed?(current.id),
+               do:
+                 Ecto.Changeset.add_error(
+                   tracking_cs,
+                   :status,
+                   "is controlled by an existing booking"
+                 ),
+               else: tracking_cs
+
+          case Repo.update(tracking_cs) do
+            {:ok, _} ->
+              :ok
+
+            {:error, invalid} ->
+              invalid =
+                Enum.reduce(invalid.errors, changeset, fn {field, {message, opts}}, acc ->
+                  Ecto.Changeset.add_error(acc, field, message, opts)
+                end)
+
+              Repo.rollback(%{invalid | action: :update})
+          end
+        end
+
+        updated
+      end)
+
+    case result do
+      {:ok, updated} ->
         Cache.invalidate_inventory()
         broadcast_inventory_update(updated.id)
         {:ok, get_item_with_full_preloads(updated.id)}
 
-      {:error, :item, invalid, _} ->
-        {:error, invalid}
-
-      {:error, :single_item, invalid, _} ->
-        invalid =
-          Enum.reduce(invalid.errors, changeset, fn {field, {message, opts}}, acc ->
-            Ecto.Changeset.add_error(acc, field, message, opts)
-          end)
-
-        {:error, %{invalid | action: :update}}
+      error ->
+        error
     end
   end
 
@@ -659,6 +684,10 @@ defmodule LicoriceLane.Inventory do
       item
       |> Ecto.Changeset.change()
       |> Ecto.Changeset.foreign_key_constraint(:id,
+        name: :rental_allocations_item_id_fkey,
+        message: "is used in a booking"
+      )
+      |> Ecto.Changeset.foreign_key_constraint(:id,
         name: :rental_bulk_items_item_id_fkey,
         message: "is used in a booking"
       )
@@ -673,6 +702,9 @@ defmodule LicoriceLane.Inventory do
 
     result =
       Ecto.Multi.new()
+      |> Ecto.Multi.run(:lock, fn repo, _ ->
+        {:ok, repo.one(from i in Item, where: i.id == ^item.id, lock: "FOR UPDATE")}
+      end)
       |> Ecto.Multi.delete_all(
         :stock,
         from(il in LicoriceLane.Locations.ItemsLocation, where: il.item_id == ^item.id)

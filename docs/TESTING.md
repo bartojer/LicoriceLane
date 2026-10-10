@@ -65,6 +65,8 @@ These describe the agreed target setup, not features already configured in the c
 
 ## Agent debugging workflow
 
+Managed rental coverage includes `mix test test/licorice_lane/rental_lifecycle_test.exs test/licorice_lane/rental_concurrency_test.exs test/licorice_lane_web/live/admin_rental_lifecycle_test.exs --seed 0`. The concurrency case uses separate unsandboxed connections and a start barrier to exercise real PostgreSQL row-lock contention for booking capacity, checkout and partial returns. Its synthetic fixtures are committed for cross-connection visibility and cleaned up by exact fixture IDs in an `after` block; it never resets tables or runs seeds. Other lifecycle tests use the usual rollback sandbox.
+
 1. Run the focused test and inspect its expected result, failure output, and available artifacts before changing code.
 2. Reproduce the failure with the documented command and determine whether the defect is in the application, test, environment, or fixture isolation.
 3. Preserve the tested business behavior. Do not weaken assertions, add arbitrary sleeps, increase retries, or skip a test just to produce a green result. Change an expectation only when intended behavior changed or the test is demonstrably incorrect, and explain the evidence.

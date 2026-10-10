@@ -4,7 +4,7 @@ defmodule LicoriceLane.Rentals.Rental do
 
   schema "rentals" do
     field :status, Ecto.Enum,
-      values: [:active, :returned, :late, :cancelled],
+      values: [:reserved, :active, :returned, :late, :cancelled],
       default: :active
 
     field :event_type, Ecto.Enum, values: [:wedding, :corporate, :birthday]
@@ -13,6 +13,13 @@ defmodule LicoriceLane.Rentals.Rental do
     field :rented_at, :utc_datetime
     field :return_by, :utc_datetime
     field :returned_at, :utc_datetime
+    field :inventory_managed, :boolean, default: false
+    field :lifecycle_version, :integer, default: 0
+    field :checked_out_at, :utc_datetime
+    field :destination_name, :string, virtual: true
+
+    belongs_to :destination_location, LicoriceLane.Locations.Location
+    has_many :allocations, LicoriceLane.Rentals.RentalAllocation
 
     belongs_to :customer, LicoriceLane.Customers.Customer
     has_many :rental_single_items, LicoriceLane.Rentals.RentalSingleItem
